@@ -1,12 +1,8 @@
-from fpdf import FPDF
-
 def generate_report(business_name, analysis):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, txt=f"{business_name} - Online Presence Report", ln=True)
+    report = f"{business_name} - Online Presence Report\n"
     for k, v in analysis.items():
-        pdf.cell(200, 10, txt=f"{k}: {v}", ln=True)
-    filepath = f"./data/{business_name.replace(' ', '_')}_report.pdf"
-    pdf.output(filepath)
+        report += f"{k}: {v}\n"
+    filepath = f"./data/{business_name.replace(' ', '_')}_report.txt"
+    with open(filepath, 'w') as f:
+        f.write(report)
     return filepath
