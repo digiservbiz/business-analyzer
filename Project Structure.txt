@@ -1,0 +1,13 @@
+business-analyzer/
+├── scraper/
+│   └── google_scraper.py
+├── analyzer/
+│   └── website_analyzer.py
+├── reports/
+│   └── report_generator.py
+├── outreach/
+│   └── email_sender.py
+├── data/
+│   └── businesses.db
+├── main.py
+├── requirements.txt
