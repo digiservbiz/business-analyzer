@@ -1,0 +1,19 @@
+# Core dependencies
+requests           # For API calls (Google Places, PageSpeed)
+fpdf               # For generating PDF reports
+
+# Email + Automation
+smtplib            # Built-in (no install needed, but keep in mind for SMTP)
+schedule           # For task scheduling (cron-like in Python)
+python-dotenv      # For managing API keys and secrets via .env file
+
+# Web scraping (if fallback needed instead of Google API)
+beautifulsoup4     # For HTML parsing
+lxml               # Parser backend for BeautifulSoup
+
+# Optional for database usage
+sqlalchemy         # ORM for managing data storage
+psycopg2-binary    # PostgreSQL connector (if scaling beyond SQLite)
+
+# Optional for web dashboard (future enhancement)
+flask              # Lightweight web framework

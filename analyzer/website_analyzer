@@ -1,8 +1,18 @@
 import requests
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+GOOGLE_PAGESPEED_API_KEY = os.getenv("GOOGLE_PAGESPEED_API_KEY")
 
 def analyze_website(url):
     speed_api = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
-    params = {"url": url}
+    params = {
+        "url": url,
+        "key": GOOGLE_PAGESPEED_API_KEY
+    }
     speed_data = requests.get(speed_api, params=params).json()
 
     return {
