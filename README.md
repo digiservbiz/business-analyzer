@@ -1,6 +1,6 @@
 # Business Outreach Tool
 
-**Version:** 1.0.0
+**Version:** 1.1.0
 
 ## Overview
 
@@ -16,6 +16,19 @@ This tool is ideal for sales teams, marketing professionals, and anyone who need
 - **Data Management:** Edit and delete business entries directly from the UI.
 - **CSV Export:** Generate and download a CSV report of the business data for use in other applications or for offline analysis.
 - **Mock Data for Testing:** The application can be run with an 'invalid_key' to use pre-defined mock data, which is useful for testing and development without making actual API calls.
+- **n8n Integration:** Send business data to a specified n8n webhook URL to automate workflows.
+
+## Integrations
+
+### n8n Integration
+
+The Business Outreach Tool can be integrated with n8n to automate your workflows. You can send the business data to a specified n8n webhook URL, which can then trigger any n8n workflow.
+
+**How to use the n8n integration:**
+
+1.  In the "Send to n8n" section of the application, enter your n8n webhook URL.
+2.  Click the "Send to n8n" button.
+3.  The business data will be sent to your n8n webhook as a JSON array.
 
 ## Technical Stack
 
@@ -60,6 +73,8 @@ For detailed instructions on how to set up and run the application, please refer
 3.  **Database Interaction:** The fetched data is then stored in a local SQLite database (`businesses.db`), with the table structure defined in `database/schema.py`.
 
 4.  **Web Interface:** The main page of the application (`index.html`) displays the data from the database in a table. You can interact with this table to manage the business entries.
+
+5.  **n8n Integration:** You can send the business data to a specified n8n webhook URL by providing the URL in the "Send to n8n" section and clicking the "Send to n8n" button.
 
 ## Future Enhancements
 
