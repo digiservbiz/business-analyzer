@@ -66,9 +66,12 @@ def fetch_and_save_businesses_mock(query, location):
     print(f"Successfully fetched and saved {len(businesses)} businesses.")
     return businesses
 
-def generate_outreach_message(business_name):
+def generate_outreach_message(business_name, website):
   """
   Generates a personalized outreach message for a given business.
   """
-  message = f"Hello {business_name}, we've noticed your business and would love to connect."
+  if website:
+    message = f"Hello {business_name}, we've noticed your business and were impressed by your website at {website}. We'd love to connect."
+  else:
+    message = f"Hello {business_name}, we've noticed your business and would love to connect."
   return message
