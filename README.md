@@ -1,6 +1,6 @@
 # Business Outreach Tool
 
-**Version:** 1.1.0
+**Version:** 1.1.1
 
 ## Overview
 
@@ -44,9 +44,20 @@ The Business Outreach Tool can be integrated with n8n to automate your workflows
 . (root)
 ├── app.py                  # Main Flask application file
 ├── business_outreach.py    # Handles business logic and API interaction
+├── main.py                 # Main entry point of the application
 ├── database/
 │   ├── schema.py           # Defines the database schema
-│   └── manage_templates.py # Manages database templates
+│   ├── manage_templates.py # Manages database templates
+│   └── seed.py             # Seeds the database with initial data
+├── integrations/
+│   ├── __init__.py
+│   └── n8n_connector.py    # Handles connection to n8n
+├── outreach/
+│   ├── __init__.py
+│   └── email_sender.py     # Handles sending emails
+├── reports/
+│   ├── __init__.py
+│   └── report_generator.py # Handles report generation
 ├── templates/
 │   └── index.html          # Main HTML template for the web interface
 ├── .env                    # Environment variables (API key, port)
@@ -81,7 +92,7 @@ For detailed instructions on how to set up and run the application, please refer
 - Integration with CRM platforms for seamless lead management.
 - Automated email outreach capabilities.
 - Advanced filtering and sorting of business data.
-- Support for more data sources beyond the Google Maps API.
+- Support for more data sources beyond a single API.
 
 ## Contribution
 
