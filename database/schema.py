@@ -12,10 +12,18 @@ def setup_database():
             body TEXT NOT NULL
         )
     ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS businesses (
+            id INTEGER PRIMARY KEY,
+            name TEXT,
+            address TEXT,
+            website TEXT UNIQUE
+        )
+    ''')
     conn.commit()
     conn.close()
 
 if __name__ == '__main__':
-    print("Setting up database and creating email_templates table...")
+    print("Setting up database and creating tables...")
     setup_database()
     print("Done.")

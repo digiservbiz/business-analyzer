@@ -1,37 +1,30 @@
-
-import argparse
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from database.schema import EmailTemplate, Base
-
-# Database setup
-engine = create_engine('sqlite:///businesses.db')
-Base.metadata.bind = engine
-DBSession = sessionmaker(bind=engine)
+import sqlite3
 
 def add_template(name, subject, body):
     """Adds a new email template to the database."""
-    session = DBSession()
-    new_template = EmailTemplate(name=name, subject=subject, body=body)
-    session.add(new_template)
-    session.commit()
-    session.close()
-    print(f"Template ''{name}'' added successfully.")
+    try:
+        conn = sqlite3.connect('businesses.db')
+        c = conn.cursor()
+        c.execute("INSERT INTO email_templates (name, subject, body) VALUES (?, ?, ?)",
+                  (name, subject, body))
+        conn.commit()
+        conn.close()
+        print(f"Template ''{name}'' added successfully.")
+    except sqlite3.IntegrityError:
+        print(f"Error: A template with the name ''{name}'' already exists.")
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
 
-def main():
-    parser = argparse.ArgumentParser(description="Manage email templates.")
-    parser.add_argument("action", choices=["add"], help="Action to perform")
-    parser.add_argument("--name", help="Name of the template")
-    parser.add_argument("--subject", help="Subject of the email")
-    parser.add_argument("--body", help="Body of the email")
-
-    args = parser.parse_args()
-
-    if args.action == "add":
-        if not (args.name and args.subject and args.body):
-            print("Error: --name, --subject, and --body are required for adding a template.")
-            return
-        add_template(args.name, args.subject, args.body)
-
-if __name__ == '__main__':
-    main()
+def get_all_templates():
+    """Fetches all email templates from the database."""
+    try:
+        conn = sqlite3.connect('businesses.db')
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        c.execute("SELECT name, subject, body FROM email_templates")
+        templates = c.fetchall()
+        conn.close()
+        return templates
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        return []
