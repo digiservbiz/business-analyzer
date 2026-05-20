@@ -44,6 +44,7 @@
                             <th>Name</th>
                             <th>Address</th>
                             <th>Website</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -52,6 +53,12 @@
                             <td>{{ business['name'] }}</td>
                             <td>{{ business['address'] }}</td>
                             <td><a href="{{ business['website'] }}" target="_blank">{{ business['website'] }}</a></td>
+                            <td>
+                                <button onclick="openEditModal({{ business['id'] }}, '{{ business['name'] | e }}', '{{ business['address'] | e }}', '{{ business['website'] | e }}')" style="background:#28a745;color:white;border:none;padding:0.4em 0.8em;border-radius:4px;cursor:pointer;margin-right:4px;">Edit</button>
+                                <form action="/delete_business/{{ business['id'] }}" method="post" style="display:inline;" onsubmit="return confirm('Delete this business?')">
+                                    <button type="submit" style="background:#dc3545;color:white;border:none;padding:0.4em 0.8em;border-radius:4px;cursor:pointer;">Delete</button>
+                                </form>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -110,5 +117,30 @@
             </form>
         </div>
     </div>
+    <!-- Edit Modal -->
+    <div id="editModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;">
+        <div style="background:#fff;max-width:500px;margin:10% auto;padding:2em;border-radius:8px;">
+            <h2>Edit Business</h2>
+            <form id="editForm" method="post">
+                <label>Name:</label>
+                <input type="text" name="name" id="editName" required style="width:100%;padding:0.5em;margin-bottom:1em;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;">
+                <label>Address:</label>
+                <input type="text" name="address" id="editAddress" style="width:100%;padding:0.5em;margin-bottom:1em;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;">
+                <label>Website:</label>
+                <input type="text" name="website" id="editWebsite" style="width:100%;padding:0.5em;margin-bottom:1em;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;">
+                <button type="submit" style="background:#007bff;color:white;border:none;padding:0.8em 1.5em;border-radius:4px;cursor:pointer;">Save</button>
+                <button type="button" onclick="document.getElementById('editModal').style.display='none'" style="background:#6c757d;color:white;border:none;padding:0.8em 1.5em;border-radius:4px;cursor:pointer;margin-left:0.5em;">Cancel</button>
+            </form>
+        </div>
+    </div>
+    <script>
+        function openEditModal(id, name, address, website) {
+            document.getElementById('editForm').action = '/edit_business/' + id;
+            document.getElementById('editName').value = name;
+            document.getElementById('editAddress').value = address;
+            document.getElementById('editWebsite').value = website;
+            document.getElementById('editModal').style.display = 'block';
+        }
+    </script>
 </body>
 </html>
