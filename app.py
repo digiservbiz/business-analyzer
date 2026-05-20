@@ -121,14 +121,54 @@ def logout():
 # Protected routes
 # ---------------------------------------------------------------------------
 
+PER_PAGE = 10  # rows per page
+
+
 @app.route("/")
 @login_required
 def index():
+    search = sanitize_input(request.args.get("q", ""), max_length=200)
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except ValueError:
+        page = 1
+
     conn = get_db_connection()
-    businesses = conn.execute("SELECT * FROM businesses").fetchall()
+
+    if search:
+        like = f"%{search}%"
+        total = conn.execute(
+            "SELECT COUNT(*) FROM businesses WHERE name LIKE ? OR address LIKE ? OR website LIKE ?",
+            (like, like, like),
+        ).fetchone()[0]
+        businesses = conn.execute(
+            "SELECT * FROM businesses WHERE name LIKE ? OR address LIKE ? OR website LIKE ?"
+            " ORDER BY name LIMIT ? OFFSET ?",
+            (like, like, like, PER_PAGE, (page - 1) * PER_PAGE),
+        ).fetchall()
+    else:
+        total = conn.execute("SELECT COUNT(*) FROM businesses").fetchone()[0]
+        businesses = conn.execute(
+            "SELECT * FROM businesses ORDER BY name LIMIT ? OFFSET ?",
+            (PER_PAGE, (page - 1) * PER_PAGE),
+        ).fetchall()
+
     templates = get_all_templates()
     conn.close()
-    return render_template("index.html", businesses=businesses, templates=templates)
+
+    total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
+    page = min(page, total_pages)
+
+    return render_template(
+        "index.html",
+        businesses=businesses,
+        templates=templates,
+        page=page,
+        total_pages=total_pages,
+        total=total,
+        per_page=PER_PAGE,
+        search=search,
+    )
 
 
 @app.route("/fetch", methods=["POST"])

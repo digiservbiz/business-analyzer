@@ -26,6 +26,20 @@
         th, td { text-align: left; padding: 0.8em; border-bottom: 1px solid #ddd; }
         th { background-color: #f2f2f2; }
         tr:hover { background-color: #f1f1f1; }
+        .search-bar { display:flex; gap:0.5em; margin-bottom:1em; }
+        .search-bar input[type='text'] { flex:1; margin-bottom:0; }
+        .search-bar button { padding:0.8em 1.2em; background:#007bff; color:#fff; border:none; border-radius:4px; cursor:pointer; white-space:nowrap; }
+        .search-bar button:hover { background:#0056b3; }
+        .search-bar a { padding:0.8em 1em; background:#6c757d; color:#fff; border-radius:4px; text-decoration:none; white-space:nowrap; display:inline-flex; align-items:center; }
+        .search-bar a:hover { background:#545b62; }
+        .pagination { display:flex; align-items:center; gap:0.4em; margin-top:1em; flex-wrap:wrap; }
+        .pagination a, .pagination span {
+            padding:0.4em 0.8em; border:1px solid #ddd; border-radius:4px;
+            text-decoration:none; color:#007bff; font-size:0.9em;
+        }
+        .pagination span.current { background:#007bff; color:#fff; border-color:#007bff; }
+        .pagination span.disabled { color:#aaa; cursor:default; }
+        .pagination-info { font-size:0.85em; color:#666; margin-top:0.5em; }
     </style>
 </head>
 <body>
@@ -49,8 +63,24 @@
         {% endwith %}
 
         <div class="section">
-            <h2>View Businesses</h2>
-            <div id="businesses_table" style="display: block;">
+            <h2>View Businesses
+                <span style="font-size:0.7em;font-weight:normal;color:#666;">
+                    ({{ total }} total{% if search %} matching "{{ search }}"{% endif %})
+                </span>
+            </h2>
+
+            <!-- Search bar -->
+            <form method="get" action="/" class="search-bar">
+                <input type="text" name="q" value="{{ search }}"
+                       placeholder="Search by name, address or website…">
+                <button type="submit">Search</button>
+                {% if search %}
+                    <a href="/">Clear</a>
+                {% endif %}
+            </form>
+
+            <div id="businesses_table">
+                {% if businesses %}
                 <table>
                     <thead>
                         <tr>
@@ -67,8 +97,10 @@
                             <td>{{ business['address'] }}</td>
                             <td><a href="{{ business['website'] }}" target="_blank">{{ business['website'] }}</a></td>
                             <td>
-                                <button onclick="openEditModal({{ business['id'] }}, '{{ business['name'] | e }}', '{{ business['address'] | e }}', '{{ business['website'] | e }}')" style="background:#28a745;color:white;border:none;padding:0.4em 0.8em;border-radius:4px;cursor:pointer;margin-right:4px;">Edit</button>
-                                <form action="/delete_business/{{ business['id'] }}" method="post" style="display:inline;" onsubmit="return confirm('Delete this business?')">
+                                <button onclick="openEditModal({{ business['id'] }}, '{{ business['name'] | e }}', '{{ business['address'] | e }}', '{{ business['website'] | e }}')"
+                                        style="background:#28a745;color:white;border:none;padding:0.4em 0.8em;border-radius:4px;cursor:pointer;margin-right:4px;">Edit</button>
+                                <form action="/delete_business/{{ business['id'] }}" method="post" style="display:inline;"
+                                      onsubmit="return confirm('Delete {{ business[\'name\'] | e }}?')">
                                     <button type="submit" style="background:#dc3545;color:white;border:none;padding:0.4em 0.8em;border-radius:4px;cursor:pointer;">Delete</button>
                                 </form>
                             </td>
@@ -76,6 +108,43 @@
                         {% endfor %}
                     </tbody>
                 </table>
+
+                <!-- Pagination -->
+                {% if total_pages > 1 %}
+                <div class="pagination">
+                    {% if page > 1 %}
+                        <a href="/?page={{ page - 1 }}{% if search %}&q={{ search }}{% endif %}">‹ Prev</a>
+                    {% else %}
+                        <span class="disabled">‹ Prev</span>
+                    {% endif %}
+
+                    {% for p in range(1, total_pages + 1) %}
+                        {% if p == page %}
+                            <span class="current">{{ p }}</span>
+                        {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+                            <a href="/?page={{ p }}{% if search %}&q={{ search }}{% endif %}">{{ p }}</a>
+                        {% elif p == page - 3 or p == page + 3 %}
+                            <span class="disabled">…</span>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if page < total_pages %}
+                        <a href="/?page={{ page + 1 }}{% if search %}&q={{ search }}{% endif %}">Next ›</a>
+                    {% else %}
+                        <span class="disabled">Next ›</span>
+                    {% endif %}
+                </div>
+                <p class="pagination-info">
+                    Showing {{ ((page - 1) * per_page) + 1 }}–{{ [page * per_page, total] | min }}
+                    of {{ total }} businesses
+                </p>
+                {% endif %}
+
+                {% else %}
+                <p style="color:#666;text-align:center;padding:2em 0;">
+                    {% if search %}No businesses match "{{ search }}".{% else %}No businesses yet — use Fetch to add some.{% endif %}
+                </p>
+                {% endif %}
             </div>
         </div>
 
