@@ -23,6 +23,30 @@ def setup_database(db_path=None):
             website TEXT UNIQUE
         )
     ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS domains (
+            id INTEGER PRIMARY KEY,
+            domain TEXT UNIQUE NOT NULL,
+            keywords TEXT,
+            industry TEXT,
+            location TEXT,
+            asking_price REAL DEFAULT 0,
+            status TEXT DEFAULT 'available',
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS domain_pitches (
+            id INTEGER PRIMARY KEY,
+            domain_id INTEGER NOT NULL,
+            business_id INTEGER NOT NULL,
+            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE,
+            FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+            UNIQUE(domain_id, business_id)
+        )
+    ''')
     conn.commit()
     conn.close()
 

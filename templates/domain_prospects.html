@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Find Buyers — {{ domain.domain }}</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+        body { font-family: sans-serif; margin: 2em; background: #f4f4f9; color: #333; }
+        .container { max-width: 1100px; margin: auto; background: #fff; padding: 2em; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5em; }
+        .topbar h1 { margin:0; font-size:1.4em; }
+        .nav a { color:#007bff; text-decoration:none; font-weight:bold; margin-right:1em; }
+        .section { margin-bottom:2em; padding:1.5em; border:1px solid #ddd; border-radius:5px; }
+        h2 { border-bottom:2px solid #007bff; padding-bottom:0.5em; color:#007bff; margin-top:0; }
+        .analysis-box { background:#f8f9fa; border:1px solid #dee2e6; border-radius:6px; padding:1.2em; margin-bottom:1.5em; }
+        .analysis-box h3 { margin:0 0 0.8em; color:#333; }
+        .analysis-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:0.8em; }
+        .analysis-item { background:#fff; border:1px solid #e0e0e0; border-radius:4px; padding:0.8em; }
+        .analysis-item .label { font-size:0.75em; color:#888; text-transform:uppercase; letter-spacing:0.05em; }
+        .analysis-item .value { font-size:1em; font-weight:bold; color:#333; margin-top:0.2em; }
+        label { display:block; margin-bottom:0.4em; font-weight:bold; font-size:0.9em; }
+        input[type='text'] { width:100%; padding:0.75em; margin-bottom:1em; border:1px solid #ccc; border-radius:4px; font-size:1em; }
+        .btn { display:inline-block; padding:0.7em 1.4em; border:none; border-radius:4px; cursor:pointer; font-size:0.95em; font-weight:bold; text-decoration:none; }
+        .btn-primary { background:#007bff; color:#fff; }
+        .btn-primary:hover { background:#0056b3; }
+        .btn-success { background:#28a745; color:#fff; }
+        .btn-success:hover { background:#1e7e34; }
+        .btn-sm { padding:0.35em 0.8em; font-size:0.85em; }
+        .flash { padding:1em; margin-bottom:1em; border-radius:4px; }
+        .flash.success { background:#d4edda; color:#155724; border:1px solid #c3e6cb; }
+        .flash.error { background:#f8d7da; color:#721c24; border:1px solid #f5c6cb; }
+        .flash.info { background:#d1ecf1; color:#0c5460; border:1px solid #bee5eb; }
+        table { width:100%; border-collapse:collapse; margin-top:0.5em; }
+        th, td { text-align:left; padding:0.75em; border-bottom:1px solid #eee; vertical-align:middle; }
+        th { background:#f8f9fa; font-size:0.9em; color:#555; }
+        .weak-badge { background:#fff3cd; color:#856404; padding:0.2em 0.5em; border-radius:3px; font-size:0.8em; }
+        .no-site-badge { background:#f8d7da; color:#721c24; padding:0.2em 0.5em; border-radius:3px; font-size:0.8em; }
+        .already-pitched { color:#aaa; font-style:italic; font-size:0.85em; }
+        .pitch-preview { background:#f8f9fa; border:1px solid #dee2e6; border-radius:4px; padding:1em; margin-top:1em; white-space:pre-wrap; font-size:0.9em; font-family:monospace; }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <div class="topbar">
+        <h1>🔍 Find Buyers for <span style="color:#007bff;font-family:monospace;">{{ domain.domain }}</span></h1>
+        <div class="nav">
+            <a href="/domains">← Back to Portfolio</a>
+            <a href="/">📋 Dashboard</a>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- Domain Analysis -->
+    <div class="section">
+        <h2>🧠 Domain Analysis</h2>
+        <div class="analysis-box">
+            <div class="analysis-grid">
+                <div class="analysis-item">
+                    <div class="label">Domain</div>
+                    <div class="value" style="font-family:monospace;">{{ analysis.domain }}</div>
+                </div>
+                <div class="analysis-item">
+                    <div class="label">Detected Industry</div>
+                    <div class="value">{{ analysis.industry }}</div>
+                </div>
+                <div class="analysis-item">
+                    <div class="label">Detected Location</div>
+                    <div class="value">{{ analysis.location or 'Not detected' }}</div>
+                </div>
+                <div class="analysis-item">
+                    <div class="label">Suggested Search</div>
+                    <div class="value">{{ analysis.search_query }}</div>
+                </div>
+                {% if domain.asking_price > 0 %}
+                <div class="analysis-item">
+                    <div class="label">Asking Price</div>
+                    <div class="value">${{ "{:,.0f}".format(domain.asking_price) }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Fetch Prospects Form -->
+        <form method="post" action="/domains/{{ domain.id }}/fetch-prospects">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>Search Query <span style="font-weight:normal;color:#888;">(edit if needed)</span></label>
+            <input type="text" name="query" value="{{ analysis.search_query }}" required>
+            <label>Location Coordinates <span style="font-weight:normal;color:#888;">(lat,lng — leave blank to search globally)</span></label>
+            <input type="text" name="location" value="{{ coord_hint }}" placeholder="e.g. 25.2048,55.2708 for Dubai">
+            <button type="submit" class="btn btn-primary">🔍 Fetch Matching Businesses</button>
+        </form>
+    </div>
+
+    <!-- Matching Businesses -->
+    {% if prospects %}
+    <div class="section">
+        <h2>🎯 Matching Businesses
+            <span style="font-size:0.7em;font-weight:normal;color:#666;">
+                ({{ prospects|length }} found — {{ weak_count }} with no/weak website)
+            </span>
+        </h2>
+
+        <!-- Bulk pitch form -->
+        <form method="post" action="/domains/{{ domain.id }}/pitch-all">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <table>
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" id="selectAll" onchange="toggleAll(this)"> Select</th>
+                        <th>Business</th>
+                        <th>Address</th>
+                        <th>Website</th>
+                        <th>Priority</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for b in prospects %}
+                <tr {% if b.already_pitched %}style="opacity:0.5;"{% endif %}>
+                    <td>
+                        {% if not b.already_pitched %}
+                        <input type="checkbox" name="business_ids" value="{{ b.id }}" checked>
+                        {% endif %}
+                    </td>
+                    <td><strong>{{ b.name }}</strong></td>
+                    <td style="font-size:0.9em;color:#666;">{{ b.address }}</td>
+                    <td style="font-size:0.85em;">
+                        {% if not b.website %}
+                            <span class="no-site-badge">No website</span>
+                        {% elif b.weak_website %}
+                            <span class="weak-badge">⚠ {{ b.website[:40] }}</span>
+                        {% else %}
+                            <a href="{{ b.website }}" target="_blank" style="color:#007bff;">{{ b.website[:35] }}{% if b.website|length > 35 %}…{% endif %}</a>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if not b.website %}
+                            <strong style="color:#dc3545;">🔥 High</strong>
+                        {% elif b.weak_website %}
+                            <strong style="color:#fd7e14;">⚡ Medium</strong>
+                        {% elif b.already_pitched %}
+                            <span class="already-pitched">Already pitched</span>
+                        {% else %}
+                            <span style="color:#6c757d;">Normal</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+
+            <div style="margin-top:1.5em;">
+                <button type="submit" class="btn btn-success">
+                    📧 Send Pitch Emails to Selected
+                </button>
+                <span style="margin-left:1em;font-size:0.85em;color:#666;">
+                    Emails are sent from your configured SMTP account.
+                    <a href="/domains/{{ domain.id }}/preview-pitch">Preview email</a>
+                </span>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
+</div>
+
+<script>
+function toggleAll(source) {
+    document.querySelectorAll('input[name="business_ids"]').forEach(cb => {
+        cb.checked = source.checked;
+    });
+}
+</script>
+</body>
+</html>

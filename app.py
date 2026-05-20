@@ -24,6 +24,7 @@ from database.manage_templates import add_template, get_all_templates, delete_te
 from outreach.email_sender import send_email, get_email_template, build_recipient_email
 from reports.report_generator import generate_report
 from integrations.n8n_connector import send_to_n8n
+from domain_routes import domains_bp
 
 # ---------------------------------------------------------------------------
 # Logging  [FIX #8]
@@ -64,6 +65,9 @@ limiter = Limiter(
 )
 
 PER_PAGE = 10  # rows per page
+
+# Domain Sales Mode blueprint
+app.register_blueprint(domains_bp)
 
 # ---------------------------------------------------------------------------
 # Auth helpers
