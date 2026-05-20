@@ -49,6 +49,7 @@
             <div>
                 <span class="user-info">Signed in as <strong>{{ session.get('username', 'admin') }}</strong></span><br>
                 <form action="/logout" method="post" style="display:inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="logout-btn">Sign Out</button>
                 </form>
             </div>
@@ -151,6 +152,7 @@
         <div class="section">
             <h2>Fetch New Businesses</h2>
             <form action="/fetch" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <label for="query">Query:</label>
                 <input type="text" id="query" name="query" placeholder="e.g., 'bakeries in San Francisco'" required>
                 <label for="location">Location:</label>
@@ -174,6 +176,7 @@
                         <td>
                             <button onclick="openEditTemplateModal({{ t.id }}, '{{ t.subject | e }}', '{{ t.body | e }}')" style="background:#28a745;color:white;border:none;padding:0.4em 0.8em;border-radius:4px;cursor:pointer;margin-right:4px;">Edit</button>
                             <form action="/delete_template/{{ t.id }}" method="post" style="display:inline;" onsubmit="return confirm('Delete template {{ t.name | e }}?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" style="background:#dc3545;color:white;border:none;padding:0.4em 0.8em;border-radius:4px;cursor:pointer;">Delete</button>
                             </form>
                         </td>
@@ -185,6 +188,7 @@
             {% endif %}
             <h3 style="margin-top:0;">Add New Template</h3>
             <form action="/add_template" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <label for="name">Template Name:</label>
                 <input type="text" id="name" name="name" required>
                 <label for="subject">Subject:</label>
@@ -198,6 +202,7 @@
         <div class="section">
             <h2>Send Outreach</h2>
             <form action="/send_outreach" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <label for="template_name">Select Template:</label>
                 <select id="template_name" name="template_name">
                     {% for template in templates %}
@@ -216,6 +221,7 @@
         <div class="section">
             <h2>Send to n8n</h2>
             <form action="/send_to_n8n" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <label for="webhook_url">n8n Webhook URL:</label>
                 <input type="text" id="webhook_url" name="webhook_url" placeholder="Enter your n8n webhook URL" required>
                 <input type="submit" value="Send to n8n">
@@ -227,6 +233,7 @@
         <div style="background:#fff;max-width:500px;margin:10% auto;padding:2em;border-radius:8px;">
             <h2>Edit Business</h2>
             <form id="editForm" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <label>Name:</label>
                 <input type="text" name="name" id="editName" required style="width:100%;padding:0.5em;margin-bottom:1em;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;">
                 <label>Address:</label>
@@ -243,6 +250,7 @@
         <div style="background:#fff;max-width:520px;margin:8% auto;padding:2em;border-radius:8px;">
             <h2>Edit Template</h2>
             <form id="editTemplateForm" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <label>Subject:</label>
                 <input type="text" name="subject" id="editTemplateSubject" required style="width:100%;padding:0.5em;margin-bottom:1em;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;">
                 <label>Body:</label>

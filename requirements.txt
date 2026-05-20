@@ -1,3 +1,6 @@
 flask
-requests
+flask-limiter
+flask-wtf
+gunicorn
 python-dotenv
+requests

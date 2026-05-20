@@ -5,8 +5,13 @@ from flask import (
     Flask, render_template, request, redirect,
     url_for, flash, send_file, session
 )
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_wtf.csrf import CSRFProtect, CSRFError
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import timedelta
+import logging
 import os
 import sys
 import sqlite3
@@ -20,41 +25,68 @@ from outreach.email_sender import send_email, get_email_template, build_recipien
 from reports.report_generator import generate_report
 from integrations.n8n_connector import send_to_n8n
 
+# ---------------------------------------------------------------------------
+# Logging  [FIX #8]
+# ---------------------------------------------------------------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler("app.log"),
+    ],
+)
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# App setup
+# ---------------------------------------------------------------------------
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-in-production")
+
+# Session timeout — 8 hours  [FIX #6]
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+# Set to True when running behind HTTPS (nginx/load balancer)
+app.config["SESSION_COOKIE_SECURE"] = os.getenv("HTTPS", "false").lower() == "true"
+
+# CSRF protection  [FIX #5]
+app.config["WTF_CSRF_TIME_LIMIT"] = 3600  # 1-hour token expiry
+csrf = CSRFProtect(app)
+
+# Rate limiting — protect login from brute-force  [FIX #4]
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=[],          # no blanket limit; applied per-route
+    storage_uri="memory://",
+)
+
+PER_PAGE = 10  # rows per page
 
 # ---------------------------------------------------------------------------
 # Auth helpers
 # ---------------------------------------------------------------------------
 
 def _get_password_hash():
-    """
-    Returns the stored admin password hash.
-    If ADMIN_PASSWORD_HASH is set in env, use it directly (pre-hashed).
-    If ADMIN_PASSWORD is set, hash it on first use and cache in-process.
-    Falls back to a hashed default 'admin123' with a loud warning.
-    """
     stored_hash = os.getenv("ADMIN_PASSWORD_HASH")
     if stored_hash:
         return stored_hash
-
     plaintext = os.getenv("ADMIN_PASSWORD")
     if plaintext:
         return generate_password_hash(plaintext)
-
-    # Dev-only fallback — loud warning
-    print(
-        "\n⚠️  WARNING: No ADMIN_PASSWORD set. Using insecure default credentials.\n"
-        "   Set ADMIN_USERNAME and ADMIN_PASSWORD in your .env file before deploying.\n"
+    logger.warning(
+        "No ADMIN_PASSWORD set — using insecure default. "
+        "Set ADMIN_USERNAME and ADMIN_PASSWORD in .env before deploying."
     )
     return generate_password_hash("admin123")
 
 
-_PASSWORD_HASH = None  # lazily initialised below
+_PASSWORD_HASH = None
 
 
 def login_required(f):
-    """Decorator that redirects unauthenticated requests to /login."""
     @wraps(f)
     def decorated(*args, **kwargs):
         if not session.get("logged_in"):
@@ -63,29 +95,51 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 def sanitize_input(value, max_length=500):
-    """Basic input sanitization."""
     if not value:
         return ""
     return str(value).strip()[:max_length]
 
 
 def get_db_connection():
-    conn = sqlite3.connect("businesses.db")
+    # check_same_thread=False is safe here because each request gets its
+    # own connection that is closed before the response is returned  [FIX #9]
+    conn = sqlite3.connect("businesses.db", check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
+# ---------------------------------------------------------------------------
+# Error handlers  [FIX #7]
+# ---------------------------------------------------------------------------
+
+@app.errorhandler(404)
+def not_found(e):
+    logger.warning(f"404 — {request.path}")
+    return render_template("errors/404.html"), 404
+
+
+@app.errorhandler(500)
+def server_error(e):
+    logger.error(f"500 — {request.path}: {e}")
+    return render_template("errors/500.html"), 500
+
+
+@app.errorhandler(CSRFError)
+def csrf_error(e):
+    logger.warning(f"CSRF error on {request.path}: {e.description}")
+    flash("Your session expired or the request was invalid. Please try again.", "error")
+    return redirect(url_for("index")), 400
 
 # ---------------------------------------------------------------------------
 # Auth routes
 # ---------------------------------------------------------------------------
 
 @app.route("/login", methods=["GET", "POST"])
+@limiter.limit("10 per minute")   # [FIX #4] brute-force protection
 def login():
     if session.get("logged_in"):
         return redirect(url_for("index"))
@@ -100,11 +154,14 @@ def login():
         expected_user = os.getenv("ADMIN_USERNAME", "admin")
 
         if username == expected_user and check_password_hash(_PASSWORD_HASH, password):
+            session.permanent = True   # honour PERMANENT_SESSION_LIFETIME
             session["logged_in"] = True
             session["username"] = username
+            logger.info(f"Login success: {username} from {request.remote_addr}")
             flash(f"Welcome back, {username}!", "success")
             return redirect(url_for("index"))
         else:
+            logger.warning(f"Login failed for '{username}' from {request.remote_addr}")
             flash("Invalid username or password.", "error")
 
     return render_template("login.html")
@@ -112,17 +169,15 @@ def login():
 
 @app.route("/logout", methods=["POST"])
 def logout():
+    username = session.get("username", "unknown")
     session.clear()
+    logger.info(f"Logout: {username}")
     flash("You have been logged out.", "success")
     return redirect(url_for("login"))
-
 
 # ---------------------------------------------------------------------------
 # Protected routes
 # ---------------------------------------------------------------------------
-
-PER_PAGE = 10  # rows per page
-
 
 @app.route("/")
 @login_required
@@ -134,7 +189,6 @@ def index():
         page = 1
 
     conn = get_db_connection()
-
     if search:
         like = f"%{search}%"
         total = conn.execute(
@@ -186,6 +240,7 @@ def fetch():
         flash(f"No businesses found for '{query}'. Try a different query.", "error")
     else:
         flash(f"Fetched {len(result)} business(es) for '{query}'.", "success")
+    logger.info(f"{session.get('username')} fetched '{query}' — {len(result) if result else 0} results")
     return redirect(url_for("index"))
 
 
@@ -199,6 +254,7 @@ def add_template_route():
         flash("Template name, subject, and body are all required.", "error")
         return redirect(url_for("index"))
     add_template(name, subject, body)
+    logger.info(f"{session.get('username')} added template '{name}'")
     flash(f"Successfully added template: {name}", "success")
     return redirect(url_for("index"))
 
@@ -212,6 +268,7 @@ def edit_template_route(template_id):
         flash("Subject and body are required.", "error")
         return redirect(url_for("index"))
     update_template(template_id, subject, body)
+    logger.info(f"{session.get('username')} updated template {template_id}")
     flash("Template updated successfully.", "success")
     return redirect(url_for("index"))
 
@@ -220,6 +277,7 @@ def edit_template_route(template_id):
 @login_required
 def delete_template_route(template_id):
     delete_template(template_id)
+    logger.info(f"{session.get('username')} deleted template {template_id}")
     flash("Template deleted.", "success")
     return redirect(url_for("index"))
 
@@ -255,6 +313,7 @@ def send_outreach_route():
     msg = f"Outreach sent to {sent} business(es)."
     if skipped:
         msg += f" {skipped} skipped (no valid website/email)."
+    logger.info(f"{session.get('username')} sent outreach — {sent} sent, {skipped} skipped")
     flash(msg, "success")
     return redirect(url_for("index"))
 
@@ -267,6 +326,7 @@ def generate_report_route():
     conn.close()
     businesses = [(b["name"], b["address"], b["website"]) for b in businesses]
     report_path = generate_report(businesses)
+    logger.info(f"{session.get('username')} downloaded report ({len(businesses)} rows)")
     return send_file(report_path, as_attachment=True)
 
 
@@ -285,8 +345,10 @@ def send_to_n8n_route():
     data_to_send = [dict(row) for row in businesses]
     ok = send_to_n8n(webhook_url, data_to_send)
     if ok:
+        logger.info(f"{session.get('username')} sent {len(data_to_send)} records to n8n")
         flash(f"Successfully sent {len(data_to_send)} business(es) to n8n.", "success")
     else:
+        logger.error(f"n8n send failed for {session.get('username')} — url: {webhook_url[:60]}")
         flash("Failed to send data to n8n — check the webhook URL and network.", "error")
     return redirect(url_for("index"))
 
@@ -307,6 +369,7 @@ def edit_business(business_id):
     )
     conn.commit()
     conn.close()
+    logger.info(f"{session.get('username')} edited business {business_id} → '{name}'")
     flash(f"Business '{name}' updated successfully.", "success")
     return redirect(url_for("index"))
 
@@ -319,13 +382,19 @@ def delete_business(business_id):
     if business:
         conn.execute("DELETE FROM businesses WHERE id=?", (business_id,))
         conn.commit()
+        logger.info(f"{session.get('username')} deleted business '{business['name']}'")
         flash(f"Business '{business['name']}' deleted.", "success")
     conn.close()
     return redirect(url_for("index"))
 
 
 # ---------------------------------------------------------------------------
+# Entry point — dev only  [FIX #1]
+# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
-    app.run(debug=True, host="0.0.0.0", port=port)
+    debug = os.getenv("FLASK_DEBUG", "false").lower() == "true"
+    if debug:
+        logger.warning("Running in DEBUG mode — do not use in production!")
+    app.run(debug=debug, host="0.0.0.0", port=port)
