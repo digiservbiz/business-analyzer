@@ -7,6 +7,11 @@
     <style>
         body { font-family: sans-serif; margin: 2em; background-color: #f4f4f9; color: #333; }
         .container { max-width: 960px; margin: auto; background: #fff; padding: 2em; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1em; }
+        .topbar h1 { margin: 0; }
+        .logout-btn { background: #6c757d; color: white; border: none; padding: 0.5em 1em; border-radius: 4px; cursor: pointer; font-size: 0.9em; }
+        .logout-btn:hover { background: #545b62; }
+        .user-info { font-size: 0.85em; color: #666; text-align: right; }
         .section { margin-bottom: 2em; padding: 1.5em; border: 1px solid #ddd; border-radius: 5px; }
         h1 { text-align: center; color: #333; }
         h2 { border-bottom: 2px solid #007bff; padding-bottom: 0.5em; color: #007bff; }
@@ -25,7 +30,15 @@
 </head>
 <body>
     <div class="container">
-        <h1>Business Outreach Tool</h1>
+        <div class="topbar">
+            <h1>🏢 Business Outreach Tool</h1>
+            <div>
+                <span class="user-info">Signed in as <strong>{{ session.get('username', 'admin') }}</strong></span><br>
+                <form action="/logout" method="post" style="display:inline;">
+                    <button type="submit" class="logout-btn">Sign Out</button>
+                </form>
+            </div>
+        </div>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}

@@ -1,7 +1,12 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-from flask import Flask, render_template, request, redirect, url_for, flash, send_file
+from flask import (
+    Flask, render_template, request, redirect,
+    url_for, flash, send_file, session
+)
+from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import sys
 import sqlite3
@@ -18,161 +23,269 @@ from integrations.n8n_connector import send_to_n8n
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-in-production")
 
+# ---------------------------------------------------------------------------
+# Auth helpers
+# ---------------------------------------------------------------------------
+
+def _get_password_hash():
+    """
+    Returns the stored admin password hash.
+    If ADMIN_PASSWORD_HASH is set in env, use it directly (pre-hashed).
+    If ADMIN_PASSWORD is set, hash it on first use and cache in-process.
+    Falls back to a hashed default 'admin123' with a loud warning.
+    """
+    stored_hash = os.getenv("ADMIN_PASSWORD_HASH")
+    if stored_hash:
+        return stored_hash
+
+    plaintext = os.getenv("ADMIN_PASSWORD")
+    if plaintext:
+        return generate_password_hash(plaintext)
+
+    # Dev-only fallback — loud warning
+    print(
+        "\n⚠️  WARNING: No ADMIN_PASSWORD set. Using insecure default credentials.\n"
+        "   Set ADMIN_USERNAME and ADMIN_PASSWORD in your .env file before deploying.\n"
+    )
+    return generate_password_hash("admin123")
+
+
+_PASSWORD_HASH = None  # lazily initialised below
+
+
+def login_required(f):
+    """Decorator that redirects unauthenticated requests to /login."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("logged_in"):
+            flash("Please log in to access this page.", "error")
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
 def sanitize_input(value, max_length=500):
     """Basic input sanitization."""
     if not value:
         return ""
     return str(value).strip()[:max_length]
 
+
 def get_db_connection():
-    conn = sqlite3.connect('businesses.db')
+    conn = sqlite3.connect("businesses.db")
     conn.row_factory = sqlite3.Row
     return conn
 
-@app.route('/')
+
+# ---------------------------------------------------------------------------
+# Auth routes
+# ---------------------------------------------------------------------------
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if session.get("logged_in"):
+        return redirect(url_for("index"))
+
+    if request.method == "POST":
+        global _PASSWORD_HASH
+        if _PASSWORD_HASH is None:
+            _PASSWORD_HASH = _get_password_hash()
+
+        username = sanitize_input(request.form.get("username", ""))
+        password = request.form.get("password", "")
+        expected_user = os.getenv("ADMIN_USERNAME", "admin")
+
+        if username == expected_user and check_password_hash(_PASSWORD_HASH, password):
+            session["logged_in"] = True
+            session["username"] = username
+            flash(f"Welcome back, {username}!", "success")
+            return redirect(url_for("index"))
+        else:
+            flash("Invalid username or password.", "error")
+
+    return render_template("login.html")
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    flash("You have been logged out.", "success")
+    return redirect(url_for("login"))
+
+
+# ---------------------------------------------------------------------------
+# Protected routes
+# ---------------------------------------------------------------------------
+
+@app.route("/")
+@login_required
 def index():
     conn = get_db_connection()
-    businesses = conn.execute('SELECT * FROM businesses').fetchall()
+    businesses = conn.execute("SELECT * FROM businesses").fetchall()
     templates = get_all_templates()
     conn.close()
-    return render_template('index.html', businesses=businesses, templates=templates)
+    return render_template("index.html", businesses=businesses, templates=templates)
 
-@app.route('/fetch', methods=['POST'])
+
+@app.route("/fetch", methods=["POST"])
+@login_required
 def fetch():
-    query = sanitize_input(request.form.get('query', ''))
-    location = sanitize_input(request.form.get('location', ''))
+    query = sanitize_input(request.form.get("query", ""))
+    location = sanitize_input(request.form.get("location", ""))
     if not query or not location:
-        flash("Query and location are required.", 'error')
-        return redirect(url_for('index'))
+        flash("Query and location are required.", "error")
+        return redirect(url_for("index"))
     result = fetch_and_save_businesses(query, location)
     if result is None:
-        flash("Failed to fetch businesses — check the API key or network connection.", 'error')
+        flash("Failed to fetch businesses — check the API key or network connection.", "error")
     elif len(result) == 0:
-        flash(f"No businesses found for '{query}'. Try a different query.", 'error')
+        flash(f"No businesses found for '{query}'. Try a different query.", "error")
     else:
-        flash(f"Fetched {len(result)} business(es) for '{query}'.", 'success')
-    return redirect(url_for('index'))
+        flash(f"Fetched {len(result)} business(es) for '{query}'.", "success")
+    return redirect(url_for("index"))
 
-@app.route('/add_template', methods=['POST'])
+
+@app.route("/add_template", methods=["POST"])
+@login_required
 def add_template_route():
-    name = sanitize_input(request.form.get('name', ''))
-    subject = sanitize_input(request.form.get('subject', ''))
-    body = sanitize_input(request.form.get('body', ''), max_length=5000)
+    name = sanitize_input(request.form.get("name", ""))
+    subject = sanitize_input(request.form.get("subject", ""))
+    body = sanitize_input(request.form.get("body", ""), max_length=5000)
     if not name or not subject or not body:
-        flash("Template name, subject, and body are all required.", 'error')
-        return redirect(url_for('index'))
+        flash("Template name, subject, and body are all required.", "error")
+        return redirect(url_for("index"))
     add_template(name, subject, body)
-    flash(f"Successfully added template: {name}", 'success')
-    return redirect(url_for('index'))
+    flash(f"Successfully added template: {name}", "success")
+    return redirect(url_for("index"))
 
-@app.route('/edit_template/<int:template_id>', methods=['POST'])
+
+@app.route("/edit_template/<int:template_id>", methods=["POST"])
+@login_required
 def edit_template_route(template_id):
-    subject = sanitize_input(request.form.get('subject', ''))
-    body = sanitize_input(request.form.get('body', ''), max_length=5000)
+    subject = sanitize_input(request.form.get("subject", ""))
+    body = sanitize_input(request.form.get("body", ""), max_length=5000)
     if not subject or not body:
-        flash("Subject and body are required.", 'error')
-        return redirect(url_for('index'))
+        flash("Subject and body are required.", "error")
+        return redirect(url_for("index"))
     update_template(template_id, subject, body)
-    flash("Template updated successfully.", 'success')
-    return redirect(url_for('index'))
+    flash("Template updated successfully.", "success")
+    return redirect(url_for("index"))
 
-@app.route('/delete_template/<int:template_id>', methods=['POST'])
+
+@app.route("/delete_template/<int:template_id>", methods=["POST"])
+@login_required
 def delete_template_route(template_id):
     delete_template(template_id)
-    flash("Template deleted.", 'success')
-    return redirect(url_for('index'))
+    flash("Template deleted.", "success")
+    return redirect(url_for("index"))
 
-@app.route('/send_outreach', methods=['POST'])
+
+@app.route("/send_outreach", methods=["POST"])
+@login_required
 def send_outreach_route():
-    template_name = sanitize_input(request.form.get('template_name', ''))
+    template_name = sanitize_input(request.form.get("template_name", ""))
     template = get_email_template(template_name) if template_name else None
     if not template:
-        flash("Template not found. Please select a valid template.", 'error')
-        return redirect(url_for('index'))
+        flash("Template not found. Please select a valid template.", "error")
+        return redirect(url_for("index"))
 
     conn = get_db_connection()
-    businesses = conn.execute('SELECT * FROM businesses').fetchall()
+    businesses = conn.execute("SELECT * FROM businesses").fetchall()
     conn.close()
 
     if not businesses:
-        flash("No businesses in the database to send outreach to.", 'error')
-        return redirect(url_for('index'))
+        flash("No businesses in the database to send outreach to.", "error")
+        return redirect(url_for("index"))
 
     sent, skipped = 0, 0
     for business in businesses:
-        to_email = build_recipient_email(business['website'])
+        to_email = build_recipient_email(business["website"])
         if not to_email:
             skipped += 1
             continue
-        subject = template['subject'].format(business_name=business['name'])
-        body = generate_outreach_message(business['name'], business['website'])
+        subject = template["subject"].format(business_name=business["name"])
+        body = generate_outreach_message(business["name"], business["website"])
         send_email(to_email, subject, body)
         sent += 1
 
     msg = f"Outreach sent to {sent} business(es)."
     if skipped:
         msg += f" {skipped} skipped (no valid website/email)."
-    flash(msg, 'success')
-    return redirect(url_for('index'))
+    flash(msg, "success")
+    return redirect(url_for("index"))
 
-@app.route('/generate_report')
+
+@app.route("/generate_report")
+@login_required
 def generate_report_route():
     conn = get_db_connection()
     businesses = conn.execute("SELECT name, address, website FROM businesses").fetchall()
     conn.close()
-    businesses = [(b['name'], b['address'], b['website']) for b in businesses]
-
+    businesses = [(b["name"], b["address"], b["website"]) for b in businesses]
     report_path = generate_report(businesses)
     return send_file(report_path, as_attachment=True)
 
-@app.route('/send_to_n8n', methods=['POST'])
+
+@app.route("/send_to_n8n", methods=["POST"])
+@login_required
 def send_to_n8n_route():
-    webhook_url = request.form['webhook_url']
+    webhook_url = sanitize_input(request.form.get("webhook_url", ""), max_length=2000)
     if not webhook_url:
-        flash("Please provide an n8n webhook URL.", 'error')
-        return redirect(url_for('index'))
+        flash("Please provide an n8n webhook URL.", "error")
+        return redirect(url_for("index"))
 
     conn = get_db_connection()
-    businesses = conn.execute('SELECT * FROM businesses').fetchall()
+    businesses = conn.execute("SELECT * FROM businesses").fetchall()
     conn.close()
 
     data_to_send = [dict(row) for row in businesses]
     ok = send_to_n8n(webhook_url, data_to_send)
     if ok:
-        flash(f"Successfully sent {len(data_to_send)} business(es) to n8n.", 'success')
+        flash(f"Successfully sent {len(data_to_send)} business(es) to n8n.", "success")
     else:
-        flash("Failed to send data to n8n — check the webhook URL and network.", 'error')
-    return redirect(url_for('index'))
+        flash("Failed to send data to n8n — check the webhook URL and network.", "error")
+    return redirect(url_for("index"))
 
-@app.route('/edit_business/<int:business_id>', methods=['POST'])
+
+@app.route("/edit_business/<int:business_id>", methods=["POST"])
+@login_required
 def edit_business(business_id):
-    name = request.form.get('name', '').strip()
-    address = request.form.get('address', '').strip()
-    website = request.form.get('website', '').strip()
+    name = sanitize_input(request.form.get("name", ""))
+    address = sanitize_input(request.form.get("address", ""))
+    website = sanitize_input(request.form.get("website", ""))
     if not name:
-        flash("Business name is required.", 'error')
-        return redirect(url_for('index'))
+        flash("Business name is required.", "error")
+        return redirect(url_for("index"))
     conn = get_db_connection()
     conn.execute(
         "UPDATE businesses SET name=?, address=?, website=? WHERE id=?",
-        (name, address, website, business_id)
+        (name, address, website, business_id),
     )
     conn.commit()
     conn.close()
-    flash(f"Business '{name}' updated successfully.", 'success')
-    return redirect(url_for('index'))
+    flash(f"Business '{name}' updated successfully.", "success")
+    return redirect(url_for("index"))
 
-@app.route('/delete_business/<int:business_id>', methods=['POST'])
+
+@app.route("/delete_business/<int:business_id>", methods=["POST"])
+@login_required
 def delete_business(business_id):
     conn = get_db_connection()
     business = conn.execute("SELECT name FROM businesses WHERE id=?", (business_id,)).fetchone()
     if business:
         conn.execute("DELETE FROM businesses WHERE id=?", (business_id,))
         conn.commit()
-        flash(f"Business '{business['name']}' deleted.", 'success')
+        flash(f"Business '{business['name']}' deleted.", "success")
     conn.close()
-    return redirect(url_for('index'))
+    return redirect(url_for("index"))
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8080))
-    app.run(debug=True, host='0.0.0.0', port=port)
+
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8080))
+    app.run(debug=True, host="0.0.0.0", port=port)
