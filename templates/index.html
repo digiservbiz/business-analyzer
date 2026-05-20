@@ -79,11 +79,34 @@
 
         <div class="section">
             <h2>Manage Email Templates</h2>
+            {% if templates %}
+            <table>
+                <thead>
+                    <tr><th>Name</th><th>Subject</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                    {% for t in templates %}
+                    <tr>
+                        <td>{{ t.name }}</td>
+                        <td>{{ t.subject }}</td>
+                        <td>
+                            <button onclick="openEditTemplateModal({{ t.id }}, '{{ t.subject | e }}', '{{ t.body | e }}')" style="background:#28a745;color:white;border:none;padding:0.4em 0.8em;border-radius:4px;cursor:pointer;margin-right:4px;">Edit</button>
+                            <form action="/delete_template/{{ t.id }}" method="post" style="display:inline;" onsubmit="return confirm('Delete template {{ t.name | e }}?')">
+                                <button type="submit" style="background:#dc3545;color:white;border:none;padding:0.4em 0.8em;border-radius:4px;cursor:pointer;">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <hr style="margin:1.5em 0;">
+            {% endif %}
+            <h3 style="margin-top:0;">Add New Template</h3>
             <form action="/add_template" method="post">
                 <label for="name">Template Name:</label>
                 <input type="text" id="name" name="name" required>
                 <label for="subject">Subject:</label>
-                <input type="text" id="subject" name="subject" required>
+                <input type="text" id="subject" name="subject" placeholder="e.g., Connecting with {business_name}" required>
                 <label for="body">Body:</label>
                 <textarea id="body" name="body" rows="5" required></textarea>
                 <input type="submit" value="Add Template">
@@ -133,6 +156,20 @@
             </form>
         </div>
     </div>
+    <!-- Edit Template Modal -->
+    <div id="editTemplateModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1001;">
+        <div style="background:#fff;max-width:520px;margin:8% auto;padding:2em;border-radius:8px;">
+            <h2>Edit Template</h2>
+            <form id="editTemplateForm" method="post">
+                <label>Subject:</label>
+                <input type="text" name="subject" id="editTemplateSubject" required style="width:100%;padding:0.5em;margin-bottom:1em;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;">
+                <label>Body:</label>
+                <textarea name="body" id="editTemplateBody" rows="6" required style="width:100%;padding:0.5em;margin-bottom:1em;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;"></textarea>
+                <button type="submit" style="background:#007bff;color:white;border:none;padding:0.8em 1.5em;border-radius:4px;cursor:pointer;">Save</button>
+                <button type="button" onclick="document.getElementById('editTemplateModal').style.display='none'" style="background:#6c757d;color:white;border:none;padding:0.8em 1.5em;border-radius:4px;cursor:pointer;margin-left:0.5em;">Cancel</button>
+            </form>
+        </div>
+    </div>
     <script>
         function openEditModal(id, name, address, website) {
             document.getElementById('editForm').action = '/edit_business/' + id;
@@ -140,6 +177,12 @@
             document.getElementById('editAddress').value = address;
             document.getElementById('editWebsite').value = website;
             document.getElementById('editModal').style.display = 'block';
+        }
+        function openEditTemplateModal(id, subject, body) {
+            document.getElementById('editTemplateForm').action = '/edit_template/' + id;
+            document.getElementById('editTemplateSubject').value = subject;
+            document.getElementById('editTemplateBody').value = body;
+            document.getElementById('editTemplateModal').style.display = 'block';
         }
     </script>
 </body>
