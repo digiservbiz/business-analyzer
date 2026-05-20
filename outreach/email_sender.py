@@ -8,6 +8,7 @@ from email.mime.application import MIMEApplication
 
 def get_email_template(name=None):
     """Fetches an email template from the database, either by name or randomly."""
+    conn = None
     try:
         conn = sqlite3.connect('businesses.db')
         conn.row_factory = sqlite3.Row
@@ -16,13 +17,13 @@ def get_email_template(name=None):
             c.execute("SELECT subject, body FROM email_templates WHERE name = ?", (name,))
             template = c.fetchone()
             if not template:
-                print(f"Error: Template with name ''{name}'' not found.")
+                print(f"Error: Template with name '{name}' not found.")
                 return None
-            return template
+            return dict(template)
         else:
             c.execute("SELECT subject, body FROM email_templates")
             templates = c.fetchall()
-            return random.choice(templates) if templates else None
+            return dict(random.choice(templates)) if templates else None
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         return None

@@ -30,13 +30,13 @@ def fetch_and_save_businesses(query, location):
 
     conn = sqlite3.connect('businesses.db')
     c = conn.cursor()
-    c.execute("DELETE FROM businesses")
     for business in businesses:
-        try:
-            c.execute("INSERT INTO businesses (name, address, website) VALUES (?, ?, ?)",
-                      (business['name'], business['address'], business['website']))
-        except sqlite3.IntegrityError:
-            print(f"Business '{business['name']}' already exists in the database.")
+        c.execute("""
+            INSERT INTO businesses (name, address, website) VALUES (?, ?, ?)
+            ON CONFLICT(website) DO UPDATE SET
+                name=excluded.name,
+                address=excluded.address
+        """, (business['name'], business['address'], business.get('website', '')))
     conn.commit()
     conn.close()
     print(f"Successfully fetched and saved {len(businesses)} businesses.")
@@ -54,13 +54,13 @@ def fetch_and_save_businesses_mock(query, location):
 
     conn = sqlite3.connect('businesses.db')
     c = conn.cursor()
-    c.execute("DELETE FROM businesses")
     for business in businesses:
-        try:
-            c.execute("INSERT INTO businesses (name, address, website) VALUES (?, ?, ?)",
-                      (business['name'], business['address'], business['website']))
-        except sqlite3.IntegrityError:
-            print(f"Business '{business['name']}' already exists in the database.")
+        c.execute("""
+            INSERT INTO businesses (name, address, website) VALUES (?, ?, ?)
+            ON CONFLICT(website) DO UPDATE SET
+                name=excluded.name,
+                address=excluded.address
+        """, (business['name'], business['address'], business.get('website', '')))
     conn.commit()
     conn.close()
     print(f"Successfully fetched and saved {len(businesses)} businesses.")

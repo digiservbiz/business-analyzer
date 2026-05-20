@@ -16,7 +16,13 @@ from reports.report_generator import generate_report
 from integrations.n8n_connector import send_to_n8n
 
 app = Flask(__name__)
-app.secret_key = 'a_secret_key'  # It's important to set a secret key for flashing messages
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-in-production")
+
+def sanitize_input(value, max_length=500):
+    """Basic input sanitization."""
+    if not value:
+        return ""
+    return str(value).strip()[:max_length]
 
 def get_db_connection():
     conn = sqlite3.connect('businesses.db')
@@ -33,8 +39,11 @@ def index():
 
 @app.route('/fetch', methods=['POST'])
 def fetch():
-    query = request.form['query']
-    location = request.form['location']
+    query = sanitize_input(request.form.get('query', ''))
+    location = sanitize_input(request.form.get('location', ''))
+    if not query or not location:
+        flash("Query and location are required.", 'error')
+        return redirect(url_for('index'))
     fetch_and_save_businesses(query, location)
     flash(f"Successfully fetched businesses for query: {query}", 'success')
     return redirect(url_for('index'))
@@ -71,11 +80,10 @@ def send_outreach_route():
 
 @app.route('/generate_report')
 def generate_report_route():
-    conn = sqlite3.connect('businesses.db')
-    c = conn.cursor()
-    c.execute("SELECT name, address, website FROM businesses")
-    businesses = c.fetchall()
+    conn = get_db_connection()
+    businesses = conn.execute("SELECT name, address, website FROM businesses").fetchall()
     conn.close()
+    businesses = [(b['name'], b['address'], b['website']) for b in businesses]
 
     report_path = generate_report(businesses)
     return send_file(report_path, as_attachment=True)
@@ -94,6 +102,35 @@ def send_to_n8n_route():
     data_to_send = [dict(row) for row in businesses]
     send_to_n8n(webhook_url, data_to_send)
     flash("Successfully sent business data to n8n.", 'success')
+    return redirect(url_for('index'))
+
+@app.route('/edit_business/<int:business_id>', methods=['POST'])
+def edit_business(business_id):
+    name = request.form.get('name', '').strip()
+    address = request.form.get('address', '').strip()
+    website = request.form.get('website', '').strip()
+    if not name:
+        flash("Business name is required.", 'error')
+        return redirect(url_for('index'))
+    conn = get_db_connection()
+    conn.execute(
+        "UPDATE businesses SET name=?, address=?, website=? WHERE id=?",
+        (name, address, website, business_id)
+    )
+    conn.commit()
+    conn.close()
+    flash(f"Business '{name}' updated successfully.", 'success')
+    return redirect(url_for('index'))
+
+@app.route('/delete_business/<int:business_id>', methods=['POST'])
+def delete_business(business_id):
+    conn = get_db_connection()
+    business = conn.execute("SELECT name FROM businesses WHERE id=?", (business_id,)).fetchone()
+    if business:
+        conn.execute("DELETE FROM businesses WHERE id=?", (business_id,))
+        conn.commit()
+        flash(f"Business '{business['name']}' deleted.", 'success')
+    conn.close()
     return redirect(url_for('index'))
 
 if __name__ == '__main__':

@@ -9,9 +9,9 @@ def add_template(name, subject, body):
                   (name, subject, body))
         conn.commit()
         conn.close()
-        print(f"Template ''{name}'' added successfully.")
+        print(f"Template '{name}' added successfully.")
     except sqlite3.IntegrityError:
-        print(f"Error: A template with the name ''{name}'' already exists.")
+        print(f"Error: A template with the name '{name}' already exists.")
     except sqlite3.Error as e:
         print(f"Database error: {e}")
 
