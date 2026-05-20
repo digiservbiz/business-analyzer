@@ -120,6 +120,7 @@
                         <th>Address</th>
                         <th>Website</th>
                         <th>Priority</th>
+                        <th>Decision Makers</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -150,6 +151,41 @@
                             <span class="already-pitched">Already pitched</span>
                         {% else %}
                             <span style="color:#6c757d;">Normal</span>
+                        {% endif %}
+                    </td>
+                    <td style="min-width:200px;">
+                        {% if b.contacts %}
+                            <div style="font-size:0.82em;">
+                            {% for c in b.contacts %}
+                                <div style="margin-bottom:0.5em;padding:0.4em;background:{% if c.pitched %}#f0f0f0{% else %}#e8f4fd{% endif %};border-radius:4px;">
+                                    <strong>{{ c.name }}</strong><br>
+                                    <span style="color:#666;">{{ c.title }}</span><br>
+                                    {% if c.email %}
+                                        <form action="/domains/{{ domain.id }}/pitch-contact/{{ c.id }}" method="post" style="display:inline;">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" {% if c.pitched %}disabled{% endif %}
+                                                    style="background:{% if c.pitched %}#ccc{% else %}#17a2b8{% endif %};color:white;border:none;padding:0.25em 0.6em;border-radius:3px;cursor:{% if c.pitched %}default{% else %}pointer{% endif %};font-size:0.8em;margin-top:0.2em;">
+                                                {% if c.pitched %}✓ Pitched{% else %}📧 Pitch{% endif %}
+                                            </button>
+                                        </form>
+                                        <span style="font-size:0.8em;color:#333;margin-left:0.3em;">{{ c.email }}</span>
+                                    {% else %}
+                                        <span style="font-size:0.78em;color:#888;">No email (upgrade Apollo plan)</span>
+                                    {% endif %}
+                                    {% if c.linkedin_url %}
+                                        <a href="{{ c.linkedin_url }}" target="_blank" style="font-size:0.78em;color:#0077b5;margin-left:0.3em;">LinkedIn</a>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                            </div>
+                        {% endif %}
+                        {% if not b.already_pitched %}
+                        <form action="/domains/{{ domain.id }}/find-contacts/{{ b.id }}" method="post" style="margin-top:{% if b.contacts %}0.4em{% else %}0{% endif %};">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" style="background:#6f42c1;color:white;border:none;padding:0.3em 0.7em;border-radius:4px;cursor:pointer;font-size:0.82em;white-space:nowrap;">
+                                🔍 {% if b.contacts %}Re-search{% else %}Find Contacts{% endif %}
+                            </button>
+                        </form>
                         {% endif %}
                     </td>
                 </tr>

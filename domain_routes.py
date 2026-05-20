@@ -106,13 +106,14 @@ def domains_add():
 @domains_bp.route("/domains/<int:domain_id>/prospects")
 @login_required
 def domains_prospects(domain_id):
+    import sqlite3
+
     domain = get_domain(domain_id)
     if not domain:
         flash("Domain not found.", "error")
         return redirect(url_for("domains.domains_list"))
 
     analysis = analyze_domain(domain["domain"])
-    # Override with stored values if they exist
     if domain["industry"]:
         analysis["industry"] = domain["industry"]
     if domain["location"]:
@@ -122,13 +123,33 @@ def domains_prospects(domain_id):
 
     coord_hint = CITY_COORDS.get(analysis.get("location", ""), "")
 
+    # Always load persisted businesses so contacts/pitch state survive page reloads
+    conn = sqlite3.connect("businesses.db")
+    conn.row_factory = sqlite3.Row
+    businesses = conn.execute("SELECT * FROM businesses ORDER BY name").fetchall()
+    conn.close()
+
+    prospects = None
+    weak_count = 0
+    if businesses:
+        pitched_ids = get_pitched_business_ids(domain_id)
+        contacts_map = get_all_contacts_for_domain(domain_id)
+        prospects = []
+        for b in businesses:
+            b_dict = dict(b)
+            b_dict["weak_website"] = is_weak_website(b["website"])
+            b_dict["already_pitched"] = b["id"] in pitched_ids
+            b_dict["contacts"] = contacts_map.get(b["id"], [])
+            prospects.append(b_dict)
+        weak_count = sum(1 for p in prospects if not p["website"] or p["weak_website"])
+
     return render_template(
         "domain_prospects.html",
         domain=domain,
         analysis=analysis,
         coord_hint=coord_hint,
-        prospects=None,
-        weak_count=0,
+        prospects=prospects,
+        weak_count=weak_count,
     )
 
 
@@ -162,11 +183,13 @@ def domains_fetch_prospects(domain_id):
     conn.close()
 
     pitched_ids = get_pitched_business_ids(domain_id)
+    contacts_map = get_all_contacts_for_domain(domain_id)
     prospects = []
     for b in businesses:
         b_dict = dict(b)
         b_dict["weak_website"] = is_weak_website(b["website"])
         b_dict["already_pitched"] = b["id"] in pitched_ids
+        b_dict["contacts"] = contacts_map.get(b["id"], [])
         prospects.append(b_dict)
 
     weak_count = sum(1 for p in prospects if not p["website"] or p["weak_website"])
@@ -265,4 +288,90 @@ def domains_preview_pitch(domain_id):
         return redirect(url_for("domains.domains_list"))
     pitch = generate_pitch_email(domain["domain"], "{business_name}", domain["asking_price"] or 0)
     flash(f"Subject: {pitch['subject']}\n\n{pitch['body']}", "info")
+    return redirect(url_for("domains.domains_prospects", domain_id=domain_id))
+
+
+@domains_bp.route("/domains/<int:domain_id>/find-contacts/<int:business_id>", methods=["POST"])
+@login_required
+def domains_find_contacts(domain_id, business_id):
+    import sqlite3
+    domain = get_domain(domain_id)
+    if not domain:
+        flash("Domain not found.", "error")
+        return redirect(url_for("domains.domains_list"))
+
+    conn = sqlite3.connect("businesses.db")
+    conn.row_factory = sqlite3.Row
+    business = conn.execute(
+        "SELECT * FROM businesses WHERE id=?", (business_id,)
+    ).fetchone()
+    conn.close()
+
+    if not business:
+        flash("Business not found.", "error")
+        return redirect(url_for("domains.domains_prospects", domain_id=domain_id))
+
+    # Extract bare domain from website URL
+    biz_domain = None
+    website = business["website"] or ""
+    if website:
+        if "://" not in website:
+            website = "http://" + website
+        parsed = urlparse(website)
+        biz_domain = parsed.netloc.replace("www.", "").strip() or None
+
+    people, error = search_decision_makers(business["name"], domain=biz_domain)
+
+    if error:
+        flash(f"Apollo search: {error}", "error")
+    elif not people:
+        flash(
+            f"No decision-makers found for '{business['name']}' on Apollo.io. "
+            "Try adding APOLLO_API_KEY to .env.",
+            "info",
+        )
+    else:
+        add_contacts(domain_id, business_id, people)
+        flash(
+            f"Found {len(people)} decision-maker(s) at '{business['name']}'. "
+            "Click their email to send a personalised pitch.",
+            "success",
+        )
+
+    return redirect(url_for("domains.domains_prospects", domain_id=domain_id))
+
+
+@domains_bp.route("/domains/<int:domain_id>/pitch-contact/<int:contact_id>", methods=["POST"])
+@login_required
+def domains_pitch_contact(domain_id, contact_id):
+    domain = get_domain(domain_id)
+    if not domain:
+        flash("Domain not found.", "error")
+        return redirect(url_for("domains.domains_list"))
+
+    contact = get_contact(contact_id)
+    if not contact:
+        flash("Contact not found.", "error")
+        return redirect(url_for("domains.domains_prospects", domain_id=domain_id))
+
+    to_email = (contact["email"] or "").strip()
+    if not to_email:
+        flash(
+            f"No email address available for {contact['name'] or 'this contact'}. "
+            "Upgrade your Apollo plan to unlock email addresses.",
+            "error",
+        )
+        return redirect(url_for("domains.domains_prospects", domain_id=domain_id))
+
+    pitch = generate_pitch_email(
+        domain["domain"],
+        contact["name"].split()[0] if contact["name"] else "there",
+        domain["asking_price"] or 0,
+    )
+    send_email(to_email, pitch["subject"], pitch["body"])
+    mark_contact_pitched(contact_id)
+    if contact["business_id"]:
+        record_pitch(domain_id, contact["business_id"])
+
+    flash(f"Pitch sent to {contact['name'] or to_email} ({to_email}).", "success")
     return redirect(url_for("domains.domains_prospects", domain_id=domain_id))
