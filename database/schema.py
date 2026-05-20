@@ -47,6 +47,22 @@ def setup_database(db_path=None):
             UNIQUE(domain_id, business_id)
         )
     ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS domain_contacts (
+            id INTEGER PRIMARY KEY,
+            domain_id INTEGER NOT NULL,
+            business_id INTEGER,
+            name TEXT,
+            title TEXT,
+            email TEXT,
+            linkedin_url TEXT,
+            source TEXT DEFAULT 'apollo',
+            found_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            pitched INTEGER DEFAULT 0,
+            FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE,
+            FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE SET NULL
+        )
+    ''')
     conn.commit()
     conn.close()
 

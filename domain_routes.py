@@ -6,6 +6,7 @@ Registered as a Blueprint in app.py.
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from functools import wraps
 import os
+from urllib.parse import urlparse
 
 from domain_analyzer import analyze_domain, is_weak_website, generate_pitch_email
 from database.manage_domains import (
@@ -13,6 +14,11 @@ from database.manage_domains import (
     update_domain_status, delete_domain,
     record_pitch, get_pitched_business_ids,
 )
+from database.manage_contacts import (
+    add_contacts, get_all_contacts_for_domain,
+    get_contact, mark_contact_pitched,
+)
+from integrations.apollo_connector import search_decision_makers
 from outreach.email_sender import send_email, build_recipient_email
 
 domains_bp = Blueprint("domains", __name__)
