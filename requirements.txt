@@ -1,2 +1,8 @@
 flask
+flask-limiter
+flask-wtf
+gunicorn
+python-dotenv
 requests
+APScheduler
+anthropic

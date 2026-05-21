@@ -7,6 +7,11 @@
     <style>
         body { font-family: sans-serif; margin: 2em; background-color: #f4f4f9; color: #333; }
         .container { max-width: 960px; margin: auto; background: #fff; padding: 2em; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1em; }
+        .topbar h1 { margin: 0; }
+        .logout-btn { background: #6c757d; color: white; border: none; padding: 0.5em 1em; border-radius: 4px; cursor: pointer; font-size: 0.9em; }
+        .logout-btn:hover { background: #545b62; }
+        .user-info { font-size: 0.85em; color: #666; text-align: right; }
         .section { margin-bottom: 2em; padding: 1.5em; border: 1px solid #ddd; border-radius: 5px; }
         h1 { text-align: center; color: #333; }
         h2 { border-bottom: 2px solid #007bff; padding-bottom: 0.5em; color: #007bff; }
@@ -21,11 +26,45 @@
         th, td { text-align: left; padding: 0.8em; border-bottom: 1px solid #ddd; }
         th { background-color: #f2f2f2; }
         tr:hover { background-color: #f1f1f1; }
+        .search-bar { display:flex; gap:0.5em; margin-bottom:1em; }
+        .search-bar input[type='text'] { flex:1; margin-bottom:0; }
+        .search-bar button { padding:0.8em 1.2em; background:#007bff; color:#fff; border:none; border-radius:4px; cursor:pointer; white-space:nowrap; }
+        .search-bar button:hover { background:#0056b3; }
+        .search-bar a { padding:0.8em 1em; background:#6c757d; color:#fff; border-radius:4px; text-decoration:none; white-space:nowrap; display:inline-flex; align-items:center; }
+        .search-bar a:hover { background:#545b62; }
+        .pagination { display:flex; align-items:center; gap:0.4em; margin-top:1em; flex-wrap:wrap; }
+        .pagination a, .pagination span {
+            padding:0.4em 0.8em; border:1px solid #ddd; border-radius:4px;
+            text-decoration:none; color:#007bff; font-size:0.9em;
+        }
+        .pagination span.current { background:#007bff; color:#fff; border-color:#007bff; }
+        .pagination span.disabled { color:#aaa; cursor:default; }
+        .pagination-info { font-size:0.85em; color:#666; margin-top:0.5em; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Business Outreach Tool</h1>
+        <div class="topbar">
+            <div style="display:flex;align-items:center;gap:1.2em;">
+                <h1 style="margin:0;">🏢 Business Outreach Tool</h1>
+                <a href="/domains" style="font-size:0.95em;color:#007bff;text-decoration:none;font-weight:bold;border:1px solid #007bff;padding:0.3em 0.8em;border-radius:4px;">
+                    🌐 Domain Sales
+                </a>
+                <a href="/analytics" style="font-size:0.95em;color:#17a2b8;text-decoration:none;font-weight:bold;border:1px solid #17a2b8;padding:0.3em 0.8em;border-radius:4px;margin-left:0.5em;">
+                    📊 Analytics
+                </a>
+                <a href="/sequences" style="font-size:0.95em;color:#6f42c1;text-decoration:none;font-weight:bold;border:1px solid #6f42c1;padding:0.3em 0.8em;border-radius:4px;margin-left:0.5em;">
+                    📋 Sequences
+                </a>
+            </div>
+            <div>
+                <span class="user-info">Signed in as <strong>{{ session.get('username', 'admin') }}</strong></span><br>
+                <form action="/logout" method="post" style="display:inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="logout-btn">Sign Out</button>
+                </form>
+            </div>
+        </div>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -36,14 +75,31 @@
         {% endwith %}
 
         <div class="section">
-            <h2>View Businesses</h2>
-            <div id="businesses_table" style="display: block;">
+            <h2>View Businesses
+                <span style="font-size:0.7em;font-weight:normal;color:#666;">
+                    ({{ total }} total{% if search %} matching "{{ search }}"{% endif %})
+                </span>
+            </h2>
+
+            <!-- Search bar -->
+            <form method="get" action="/" class="search-bar">
+                <input type="text" name="q" value="{{ search }}"
+                       placeholder="Search by name, address or website…">
+                <button type="submit">Search</button>
+                {% if search %}
+                    <a href="/">Clear</a>
+                {% endif %}
+            </form>
+
+            <div id="businesses_table">
+                {% if businesses %}
                 <table>
                     <thead>
                         <tr>
                             <th>Name</th>
                             <th>Address</th>
                             <th>Website</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -52,16 +108,62 @@
                             <td>{{ business['name'] }}</td>
                             <td>{{ business['address'] }}</td>
                             <td><a href="{{ business['website'] }}" target="_blank">{{ business['website'] }}</a></td>
+                            <td>
+                                <button onclick="openEditModal({{ business['id'] }}, '{{ business['name'] | e }}', '{{ business['address'] | e }}', '{{ business['website'] | e }}')"
+                                        style="background:#28a745;color:white;border:none;padding:0.4em 0.8em;border-radius:4px;cursor:pointer;margin-right:4px;">Edit</button>
+                                <form action="/delete_business/{{ business['id'] }}" method="post" style="display:inline;"
+                                      onsubmit="return confirm('Delete {{ business[\'name\'] | e }}?')">
+                                    <button type="submit" style="background:#dc3545;color:white;border:none;padding:0.4em 0.8em;border-radius:4px;cursor:pointer;">Delete</button>
+                                </form>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
+
+                <!-- Pagination -->
+                {% if total_pages > 1 %}
+                <div class="pagination">
+                    {% if page > 1 %}
+                        <a href="/?page={{ page - 1 }}{% if search %}&q={{ search }}{% endif %}">‹ Prev</a>
+                    {% else %}
+                        <span class="disabled">‹ Prev</span>
+                    {% endif %}
+
+                    {% for p in range(1, total_pages + 1) %}
+                        {% if p == page %}
+                            <span class="current">{{ p }}</span>
+                        {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+                            <a href="/?page={{ p }}{% if search %}&q={{ search }}{% endif %}">{{ p }}</a>
+                        {% elif p == page - 3 or p == page + 3 %}
+                            <span class="disabled">…</span>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if page < total_pages %}
+                        <a href="/?page={{ page + 1 }}{% if search %}&q={{ search }}{% endif %}">Next ›</a>
+                    {% else %}
+                        <span class="disabled">Next ›</span>
+                    {% endif %}
+                </div>
+                <p class="pagination-info">
+                    Showing {{ ((page - 1) * per_page) + 1 }}–{{ [page * per_page, total] | min }}
+                    of {{ total }} businesses
+                </p>
+                {% endif %}
+
+                {% else %}
+                <p style="color:#666;text-align:center;padding:2em 0;">
+                    {% if search %}No businesses match "{{ search }}".{% else %}No businesses yet — use Fetch to add some.{% endif %}
+                </p>
+                {% endif %}
             </div>
         </div>
 
         <div class="section">
             <h2>Fetch New Businesses</h2>
             <form action="/fetch" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <label for="query">Query:</label>
                 <input type="text" id="query" name="query" placeholder="e.g., 'bakeries in San Francisco'" required>
                 <label for="location">Location:</label>
@@ -72,11 +174,36 @@
 
         <div class="section">
             <h2>Manage Email Templates</h2>
+            {% if templates %}
+            <table>
+                <thead>
+                    <tr><th>Name</th><th>Subject</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                    {% for t in templates %}
+                    <tr>
+                        <td>{{ t.name }}</td>
+                        <td>{{ t.subject }}</td>
+                        <td>
+                            <button onclick="openEditTemplateModal({{ t.id }}, '{{ t.subject | e }}', '{{ t.body | e }}')" style="background:#28a745;color:white;border:none;padding:0.4em 0.8em;border-radius:4px;cursor:pointer;margin-right:4px;">Edit</button>
+                            <form action="/delete_template/{{ t.id }}" method="post" style="display:inline;" onsubmit="return confirm('Delete template {{ t.name | e }}?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" style="background:#dc3545;color:white;border:none;padding:0.4em 0.8em;border-radius:4px;cursor:pointer;">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <hr style="margin:1.5em 0;">
+            {% endif %}
+            <h3 style="margin-top:0;">Add New Template</h3>
             <form action="/add_template" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <label for="name">Template Name:</label>
                 <input type="text" id="name" name="name" required>
                 <label for="subject">Subject:</label>
-                <input type="text" id="subject" name="subject" required>
+                <input type="text" id="subject" name="subject" placeholder="e.g., Connecting with {business_name}" required>
                 <label for="body">Body:</label>
                 <textarea id="body" name="body" rows="5" required></textarea>
                 <input type="submit" value="Add Template">
@@ -86,6 +213,7 @@
         <div class="section">
             <h2>Send Outreach</h2>
             <form action="/send_outreach" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <label for="template_name">Select Template:</label>
                 <select id="template_name" name="template_name">
                     {% for template in templates %}
@@ -104,11 +232,59 @@
         <div class="section">
             <h2>Send to n8n</h2>
             <form action="/send_to_n8n" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <label for="webhook_url">n8n Webhook URL:</label>
                 <input type="text" id="webhook_url" name="webhook_url" placeholder="Enter your n8n webhook URL" required>
                 <input type="submit" value="Send to n8n">
             </form>
         </div>
     </div>
+    <!-- Edit Modal -->
+    <div id="editModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;">
+        <div style="background:#fff;max-width:500px;margin:10% auto;padding:2em;border-radius:8px;">
+            <h2>Edit Business</h2>
+            <form id="editForm" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label>Name:</label>
+                <input type="text" name="name" id="editName" required style="width:100%;padding:0.5em;margin-bottom:1em;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;">
+                <label>Address:</label>
+                <input type="text" name="address" id="editAddress" style="width:100%;padding:0.5em;margin-bottom:1em;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;">
+                <label>Website:</label>
+                <input type="text" name="website" id="editWebsite" style="width:100%;padding:0.5em;margin-bottom:1em;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;">
+                <button type="submit" style="background:#007bff;color:white;border:none;padding:0.8em 1.5em;border-radius:4px;cursor:pointer;">Save</button>
+                <button type="button" onclick="document.getElementById('editModal').style.display='none'" style="background:#6c757d;color:white;border:none;padding:0.8em 1.5em;border-radius:4px;cursor:pointer;margin-left:0.5em;">Cancel</button>
+            </form>
+        </div>
+    </div>
+    <!-- Edit Template Modal -->
+    <div id="editTemplateModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1001;">
+        <div style="background:#fff;max-width:520px;margin:8% auto;padding:2em;border-radius:8px;">
+            <h2>Edit Template</h2>
+            <form id="editTemplateForm" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label>Subject:</label>
+                <input type="text" name="subject" id="editTemplateSubject" required style="width:100%;padding:0.5em;margin-bottom:1em;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;">
+                <label>Body:</label>
+                <textarea name="body" id="editTemplateBody" rows="6" required style="width:100%;padding:0.5em;margin-bottom:1em;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;"></textarea>
+                <button type="submit" style="background:#007bff;color:white;border:none;padding:0.8em 1.5em;border-radius:4px;cursor:pointer;">Save</button>
+                <button type="button" onclick="document.getElementById('editTemplateModal').style.display='none'" style="background:#6c757d;color:white;border:none;padding:0.8em 1.5em;border-radius:4px;cursor:pointer;margin-left:0.5em;">Cancel</button>
+            </form>
+        </div>
+    </div>
+    <script>
+        function openEditModal(id, name, address, website) {
+            document.getElementById('editForm').action = '/edit_business/' + id;
+            document.getElementById('editName').value = name;
+            document.getElementById('editAddress').value = address;
+            document.getElementById('editWebsite').value = website;
+            document.getElementById('editModal').style.display = 'block';
+        }
+        function openEditTemplateModal(id, subject, body) {
+            document.getElementById('editTemplateForm').action = '/edit_template/' + id;
+            document.getElementById('editTemplateSubject').value = subject;
+            document.getElementById('editTemplateBody').value = body;
+            document.getElementById('editTemplateModal').style.display = 'block';
+        }
+    </script>
 </body>
 </html>

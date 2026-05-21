@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - 2026-05-20
+
+### Security
+- Removed hardcoded Flask secret key — now loaded from FLASK_SECRET_KEY env var
+- Added input sanitization for all form inputs
+- Added .gitignore to prevent committing .env and database files
+
+### Fixed
+- Fixed `conn` NameError before assignment in `email_sender.py`
+- Fixed businesses being deleted on every fetch — now uses upsert (ON CONFLICT DO UPDATE)
+- Fixed double single-quotes in template name f-strings
+- Fixed `generate_report_route` to use `get_db_connection()` helper consistently
+
+### Added
+- Edit and Delete business functionality (UI + backend routes)
+- Unit tests in `tests/` directory
+- `python-dotenv` added to requirements.txt
+- Centralized `DB_PATH` constant in `database/schema.py`
+
 ## [1.1.0] - 2024-05-24
 
 ### Added

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Sequences</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+        body { font-family:sans-serif; margin:2em; background:#f4f4f9; color:#333; }
+        .container { max-width:960px; margin:auto; background:#fff; padding:2em; border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,0.1); }
+        .topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5em; }
+        .topbar h1 { margin:0; }
+        .nav a { color:#007bff; text-decoration:none; font-weight:bold; margin-right:1em; }
+        h2 { border-bottom:2px solid #6f42c1; padding-bottom:0.5em; color:#6f42c1; margin-top:1.5em; }
+        .section { margin-bottom:2em; padding:1.5em; border:1px solid #ddd; border-radius:5px; }
+        label { display:block; font-weight:bold; margin-bottom:0.4em; font-size:0.9em; }
+        input[type=text], textarea { width:100%; padding:0.75em; border:1px solid #ccc; border-radius:4px; margin-bottom:1em; }
+        .btn { padding:0.6em 1.2em; border:none; border-radius:4px; cursor:pointer; font-weight:bold; font-size:0.9em; }
+        .btn-primary { background:#6f42c1; color:#fff; }
+        .btn-danger  { background:#dc3545; color:#fff; }
+        .flash { padding:1em; margin-bottom:1em; border-radius:4px; }
+        .flash.success { background:#d4edda; color:#155724; border:1px solid #c3e6cb; }
+        .flash.info    { background:#d1ecf1; color:#0c5460; border:1px solid #bee5eb; }
+        .flash.error   { background:#f8d7da; color:#721c24; border:1px solid #f5c6cb; }
+        table { width:100%; border-collapse:collapse; }
+        th, td { padding:0.75em; border-bottom:1px solid #eee; text-align:left; }
+        th { background:#f8f9fa; font-size:0.9em; color:#555; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="topbar">
+        <h1>📋 Email Sequences</h1>
+        <div class="nav">
+            <a href="/domains">📁 Portfolio</a>
+            <a href="/analytics">📊 Analytics</a>
+            <a href="/">📋 Dashboard</a>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}{% for cat, msg in messages %}
+            <div class="flash {{ cat }}">{{ msg }}</div>
+        {% endfor %}{% endif %}
+    {% endwith %}
+
+    <!-- Existing sequences -->
+    {% if sequences %}
+    <div class="section">
+        <h2>Your Sequences</h2>
+        <table>
+            <thead><tr><th>Name</th><th>Description</th><th>Steps</th><th>Enrolled</th><th>Actions</th></tr></thead>
+            <tbody>
+            {% for s in sequences %}
+            <tr>
+                <td><strong><a href="/sequences/{{ s.id }}" style="color:#6f42c1;">{{ s.name }}</a></strong></td>
+                <td style="color:#666;font-size:0.9em;">{{ s.description or '—' }}</td>
+                <td>{{ s.step_count }}</td>
+                <td>{{ s.enrolled_count }}</td>
+                <td>
+                    <a href="/sequences/{{ s.id }}" style="color:#6f42c1;font-weight:bold;font-size:0.9em;">Edit</a>
+                    <form action="/sequences/{{ s.id }}/delete" method="post" style="display:inline;" onsubmit="return confirm('Delete sequence {{ s.name }}?')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-danger" style="padding:0.3em 0.7em;font-size:0.82em;margin-left:0.5em;">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- Create new sequence -->
+    <div class="section">
+        <h2>Create New Sequence</h2>
+        <form action="/sequences/create" method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>Sequence Name</label>
+            <input type="text" name="name" placeholder="e.g. Standard Domain Pitch" required>
+            <label>Description <span style="font-weight:normal;color:#888;">(optional)</span></label>
+            <input type="text" name="description" placeholder="Brief description of this sequence">
+            <button type="submit" class="btn btn-primary">+ Create Sequence</button>
+        </form>
+    </div>
+
+    <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;padding:1em;font-size:0.88em;color:#555;">
+        <strong>Available template variables:</strong>
+        <code>{contact_name}</code>, <code>{business_name}</code>, <code>{domain}</code>, <code>{asking_price}</code>
+    </div>
+</div>
+</body>
+</html>

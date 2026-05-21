@@ -1,3 +1,9 @@
+> **SECURITY WARNING**
+> 
+> - The Google Maps API key (`GOOGLE_MAPS_API_KEY`) committed in this repository is exposed and **must be rotated immediately**. Go to the Google Cloud Console, revoke the old key, and generate a new one. Never commit API keys to version control.
+> - Set a strong, random value for `FLASK_SECRET_KEY` in your `.env` file before running the application in any environment. The default value is not secure.
+> - Ensure `.env` is listed in `.gitignore` and never committed to your repository.
+
 # Post-installation Guide for Business Outreach Tool
 
 This guide provides instructions for setting up and running the Business Outreach Tool after completing the pre-installation steps.

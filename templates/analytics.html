@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics — Business Outreach</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+        body { font-family: sans-serif; margin: 2em; background: #f4f4f9; color: #333; }
+        .container { max-width: 1100px; margin: auto; background: #fff; padding: 2em; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5em; }
+        .topbar h1 { margin:0; }
+        .nav a { color:#007bff; text-decoration:none; font-weight:bold; margin-right:1em; }
+        h2 { border-bottom:2px solid #007bff; padding-bottom:0.5em; color:#007bff; margin-top:1.5em; }
+        .stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1em; margin-bottom:2em; }
+        .stat-card { background:#f8f9fa; border:1px solid #dee2e6; border-radius:8px; padding:1.2em; text-align:center; }
+        .stat-card .number { font-size:2em; font-weight:bold; color:#007bff; }
+        .stat-card .label { font-size:0.85em; color:#666; margin-top:0.3em; }
+        .stat-card.green .number { color:#28a745; }
+        .stat-card.orange .number { color:#fd7e14; }
+        .stat-card.teal .number { color:#17a2b8; }
+        .charts-row { display:grid; grid-template-columns:2fr 1fr; gap:1.5em; margin-bottom:2em; }
+        .chart-box { background:#f8f9fa; border:1px solid #dee2e6; border-radius:8px; padding:1.2em; }
+        .chart-box h3 { margin:0 0 1em; font-size:1em; color:#555; }
+        table { width:100%; border-collapse:collapse; margin-top:0.5em; }
+        th, td { text-align:left; padding:0.75em; border-bottom:1px solid #eee; }
+        th { background:#f8f9fa; font-size:0.9em; color:#555; }
+        .badge { padding:0.2em 0.6em; border-radius:10px; font-size:0.8em; font-weight:bold; color:#fff; }
+        .badge-available   { background:#6c757d; }
+        .badge-pitched     { background:#007bff; }
+        .badge-negotiating { background:#fd7e14; }
+        .badge-sold        { background:#28a745; }
+        @media(max-width:700px) { .charts-row { grid-template-columns:1fr; } }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="topbar">
+        <h1>📊 Analytics</h1>
+        <div class="nav">
+            <a href="/domains">📁 Portfolio</a>
+            <a href="/">📋 Dashboard</a>
+        </div>
+    </div>
+
+    <!-- Summary stats -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="number">{{ stats.total_domains }}</div>
+            <div class="label">Total Domains</div>
+        </div>
+        <div class="stat-card green">
+            <div class="number">{{ stats.total_sold }}</div>
+            <div class="label">Sold</div>
+        </div>
+        <div class="stat-card orange">
+            <div class="number">{{ stats.total_negotiating }}</div>
+            <div class="label">Negotiating</div>
+        </div>
+        <div class="stat-card">
+            <div class="number">{{ stats.total_pitched }}</div>
+            <div class="label">Pitched</div>
+        </div>
+        <div class="stat-card teal">
+            <div class="number">{{ stats.total_contacts }}</div>
+            <div class="label">Contacts Found</div>
+        </div>
+        <div class="stat-card">
+            <div class="number">{{ stats.total_emails }}</div>
+            <div class="label">Emails Sent</div>
+        </div>
+        <div class="stat-card teal">
+            <div class="number">{{ stats.total_replies }}</div>
+            <div class="label">Replies Received</div>
+        </div>
+        <div class="stat-card {% if stats.reply_rate >= 10 %}green{% elif stats.reply_rate >= 3 %}orange{% endif %}">
+            <div class="number">{{ stats.reply_rate }}%</div>
+            <div class="label">Reply Rate</div>
+        </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-row">
+        <div class="chart-box">
+            <h3>📬 Emails Sent — Last 8 Weeks</h3>
+            <canvas id="weeklyChart" height="100"></canvas>
+        </div>
+        <div class="chart-box">
+            <h3>🗂️ Domain Status Breakdown</h3>
+            <canvas id="statusChart" height="160"></canvas>
+        </div>
+    </div>
+
+    <!-- Per-domain performance table -->
+    <h2>Per-Domain Performance</h2>
+    {% if domain_stats %}
+    <table>
+        <thead>
+            <tr>
+                <th>Domain</th>
+                <th>Status</th>
+                <th>Asking Price</th>
+                <th>Contacts</th>
+                <th>Emails Sent</th>
+                <th>Replies</th>
+                <th>Reply Rate</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for d in domain_stats %}
+        <tr>
+            <td><strong>{{ d.domain }}</strong></td>
+            <td><span class="badge badge-{{ d.status }}">{{ d.status }}</span></td>
+            <td>{% if d.asking_price and d.asking_price > 0 %}${{ "{:,.0f}".format(d.asking_price) }}{% else %}—{% endif %}</td>
+            <td>{{ d.contact_count }}</td>
+            <td>{{ d.emails_sent }}</td>
+            <td>{{ d.reply_count }}</td>
+            <td>
+                {% if d.reply_rate >= 10 %}
+                    <strong style="color:#28a745;">{{ d.reply_rate }}%</strong>
+                {% elif d.reply_rate > 0 %}
+                    <span style="color:#fd7e14;">{{ d.reply_rate }}%</span>
+                {% else %}
+                    <span style="color:#ccc;">0%</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color:#666;text-align:center;padding:2em;">No campaign data yet — run your first campaign to see stats here.</p>
+    {% endif %}
+</div>
+
+<script>
+// Weekly bar chart
+const weeklyLabels = {{ weekly_labels | tojson }};
+const weeklyData   = {{ weekly_data   | tojson }};
+new Chart(document.getElementById('weeklyChart'), {
+    type: 'bar',
+    data: {
+        labels: weeklyLabels.length ? weeklyLabels : ['No data'],
+        datasets: [{
+            label: 'Emails Sent',
+            data: weeklyData.length ? weeklyData : [0],
+            backgroundColor: 'rgba(0,123,255,0.6)',
+            borderColor: '#007bff',
+            borderWidth: 1,
+            borderRadius: 4,
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+    }
+});
+
+// Status doughnut chart
+new Chart(document.getElementById('statusChart'), {
+    type: 'doughnut',
+    data: {
+        labels: ['Available', 'Pitched', 'Negotiating', 'Sold'],
+        datasets: [{
+            data: [
+                {{ stats.total_available }},
+                {{ stats.total_pitched }},
+                {{ stats.total_negotiating }},
+                {{ stats.total_sold }}
+            ],
+            backgroundColor: ['#6c757d','#007bff','#fd7e14','#28a745'],
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } }
+    }
+});
+</script>
+</body>
+</html>
