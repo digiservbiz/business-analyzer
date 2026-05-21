@@ -72,6 +72,17 @@ def setup_database(db_path=None):
             c.execute(_sql)
         except sqlite3.OperationalError:
             pass  # column already exists
+    # Migrate domain_contacts: add lead_score, replied, replied_at, reply_draft
+    for _sql in [
+        "ALTER TABLE domain_contacts ADD COLUMN lead_score INTEGER DEFAULT 0",
+        "ALTER TABLE domain_contacts ADD COLUMN replied INTEGER DEFAULT 0",
+        "ALTER TABLE domain_contacts ADD COLUMN replied_at TIMESTAMP",
+        "ALTER TABLE domain_contacts ADD COLUMN reply_draft TEXT",
+    ]:
+        try:
+            c.execute(_sql)
+        except sqlite3.OperationalError:
+            pass  # column already exists
     c.execute('''
         CREATE TABLE IF NOT EXISTS campaign_runs (
             id INTEGER PRIMARY KEY,
