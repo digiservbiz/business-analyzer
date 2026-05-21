@@ -6,6 +6,8 @@ Registered as a Blueprint in app.py.
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from functools import wraps
 import os
+import csv
+import io
 from urllib.parse import urlparse
 
 from domain_analyzer import analyze_domain, is_weak_website, generate_pitch_email
@@ -517,3 +519,78 @@ def domains_send_reply(domain_id, contact_id):
     send_email(to_email, subject, body)
     flash(f"Reply sent to {contact['name'] or to_email}.", "success")
     return redirect(url_for("domains.domains_replies", domain_id=domain_id))
+
+
+@domains_bp.route("/kanban")
+@login_required
+def domains_kanban():
+    """Kanban pipeline view — drag domains between status columns."""
+    from database.manage_domains import get_all_domains
+    all_domains = get_all_domains()
+    columns = {
+        "available":   [],
+        "pitched":     [],
+        "negotiating": [],
+        "sold":        [],
+    }
+    for d in all_domains:
+        status = d["status"] if d["status"] in columns else "available"
+        columns[status].append(dict(d))
+    return render_template("kanban.html", columns=columns)
+
+
+@domains_bp.route("/domains/<int:domain_id>/update-status", methods=["POST"])
+@login_required
+def domains_update_status(domain_id):
+    """AJAX endpoint — update domain status via Kanban drag-drop."""
+    data = request.get_json(silent=True) or {}
+    new_status = data.get("status", "")
+    valid = {"available", "pitched", "negotiating", "sold"}
+    if new_status not in valid:
+        return {"ok": False, "error": "Invalid status"}, 400
+    update_domain_status(domain_id, new_status)
+    return {"ok": True, "status": new_status}
+
+
+@domains_bp.route("/domains/import-csv", methods=["POST"])
+@login_required
+def domains_import_csv():
+    """Bulk import domains from a CSV file (columns: domain, asking_price, notes)."""
+    file = request.files.get("csv_file")
+    if not file or not file.filename.endswith(".csv"):
+        flash("Please upload a .csv file.", "error")
+        return redirect(url_for("domains.domains_list"))
+
+    content = file.read().decode("utf-8", errors="ignore")
+    reader = csv.DictReader(io.StringIO(content))
+
+    imported, skipped = 0, 0
+    for row in reader:
+        domain_str = sanitize_input(row.get("domain", "").strip())
+        if not domain_str:
+            continue
+        try:
+            price = float(row.get("asking_price", "0") or "0")
+        except ValueError:
+            price = 0.0
+        notes = sanitize_input(row.get("notes", ""), max_length=1000)
+
+        analysis = analyze_domain(domain_str)
+        ok = add_domain(
+            domain_str,
+            ",".join(analysis["tokens"]),
+            analysis["industry"],
+            analysis["location"] or "",
+            price,
+            notes,
+        )
+        if ok:
+            imported += 1
+        else:
+            skipped += 1
+
+    flash(
+        f"CSV import complete: {imported} domain(s) added, {skipped} already existed.",
+        "success" if imported else "info",
+    )
+    return redirect(url_for("domains.domains_list"))

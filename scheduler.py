@@ -44,6 +44,61 @@ def _imap_check_job() -> None:
         logger.error("IMAP check error: %s", exc)
 
 
+def _sequences_job() -> None:
+    try:
+        from database.manage_sequences import get_due_enrollments, get_steps, advance_enrollment
+        from outreach.email_sender import send_email
+
+        enrollments = get_due_enrollments()
+        sent = 0
+        for enr in enrollments:
+            steps = get_steps(enr["sequence_id"])
+            step_idx = enr["current_step"] - 1
+            if step_idx >= len(steps):
+                advance_enrollment(enr["id"], 0, 0, completed=True)
+                continue
+
+            step = steps[step_idx]
+            price_str = (
+                f"${enr['asking_price']:,.0f}"
+                if enr["asking_price"] and enr["asking_price"] > 0
+                else "a competitive price"
+            )
+            try:
+                subject = step["subject_template"].format(
+                    domain=enr["domain_name"],
+                    contact_name=enr["contact_name"] or "there",
+                    business_name=enr["business_name"] or "your business",
+                )
+                body = step["body_template"].format(
+                    domain=enr["domain_name"],
+                    contact_name=enr["contact_name"] or "there",
+                    business_name=enr["business_name"] or "your business",
+                    asking_price=price_str,
+                )
+            except KeyError:
+                subject = step["subject_template"]
+                body = step["body_template"]
+
+            to_email = (enr["contact_email"] or "").strip()
+            if to_email:
+                send_email(to_email, subject, body)
+                sent += 1
+
+            # Advance to next step or complete
+            next_step = enr["current_step"] + 1
+            if next_step > len(steps):
+                advance_enrollment(enr["id"], 0, 0, completed=True)
+            else:
+                next_delay = steps[step_idx + 1]["delay_days"]
+                advance_enrollment(enr["id"], next_step, next_delay)
+
+        if sent:
+            logger.info("Sequences: %d step emails sent", sent)
+    except Exception as exc:
+        logger.error("Sequences job error: %s", exc)
+
+
 def start_scheduler() -> None:
     """Start the background scheduler. Safe to call multiple times."""
     global _scheduler
@@ -72,6 +127,14 @@ def start_scheduler() -> None:
         "interval",
         hours=2,
         id="imap_reply_check",
+        replace_existing=True,
+    )
+    # Process sequence steps every hour
+    _scheduler.add_job(
+        _sequences_job,
+        "interval",
+        hours=1,
+        id="sequence_steps",
         replace_existing=True,
     )
     _scheduler.start()

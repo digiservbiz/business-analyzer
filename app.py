@@ -26,6 +26,13 @@ from reports.report_generator import generate_report
 from integrations.n8n_connector import send_to_n8n
 from domain_routes import domains_bp
 from scheduler import start_scheduler, get_scheduler_status
+from database.manage_analytics import get_summary_stats, get_weekly_pitch_counts, get_domain_performance
+
+try:
+    from sequence_routes import sequence_bp
+    _sequence_bp_available = True
+except ImportError:
+    _sequence_bp_available = False
 
 # ---------------------------------------------------------------------------
 # Logging  [FIX #8]
@@ -69,6 +76,8 @@ PER_PAGE = 10  # rows per page
 
 # Domain Sales Mode blueprint
 app.register_blueprint(domains_bp)
+if _sequence_bp_available:
+    app.register_blueprint(sequence_bp)
 
 # Start background scheduler (campaigns + follow-ups)  [Level 2 & 4]
 if not app.debug:
@@ -450,6 +459,23 @@ def scheduler_status_route():
 # ---------------------------------------------------------------------------
 # Entry point — dev only  [FIX #1]
 # ---------------------------------------------------------------------------
+
+@app.route("/analytics")
+@login_required
+def analytics():
+    stats = get_summary_stats()
+    weekly = get_weekly_pitch_counts(weeks=8)
+    weekly_labels = [w["week"] for w in weekly]
+    weekly_data   = [w["total"] for w in weekly]
+    domain_stats  = get_domain_performance()
+    return render_template(
+        "analytics.html",
+        stats=stats,
+        weekly_labels=weekly_labels,
+        weekly_data=weekly_data,
+        domain_stats=domain_stats,
+    )
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))

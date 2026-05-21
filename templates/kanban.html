@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>Kanban Pipeline</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+        body { font-family: sans-serif; margin: 2em; background: #f4f4f9; color: #333; }
+        .container { max-width: 1200px; margin: auto; }
+        .topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5em; }
+        .topbar h1 { margin:0; }
+        .nav a { color:#007bff; text-decoration:none; font-weight:bold; margin-right:1em; }
+        .board { display:grid; grid-template-columns:repeat(4,1fr); gap:1em; }
+        .kanban-col { background:#fff; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.08); padding:1em; min-height:400px; }
+        .kanban-col h2 { font-size:1em; margin:0 0 1em; padding:0.5em 0.8em; border-radius:4px; text-align:center; }
+        .col-available   h2 { background:#e9ecef; color:#495057; }
+        .col-pitched     h2 { background:#cfe2ff; color:#084298; }
+        .col-negotiating h2 { background:#ffecd2; color:#7d4000; }
+        .col-sold        h2 { background:#d1e7dd; color:#0a3622; }
+        .kanban-cards { min-height:300px; padding:0.25em; }
+        .domain-card {
+            background:#f8f9fa; border:1px solid #dee2e6; border-radius:6px;
+            padding:0.8em; margin-bottom:0.7em; cursor:grab;
+            transition:box-shadow 0.15s, opacity 0.15s;
+        }
+        .domain-card:hover { box-shadow:0 3px 8px rgba(0,0,0,0.12); }
+        .domain-card.dragging { opacity:0.4; cursor:grabbing; }
+        .domain-card h3 { margin:0 0 0.3em; font-size:0.95em; color:#007bff; font-family:monospace; }
+        .domain-card .price { font-size:0.8em; color:#28a745; font-weight:bold; }
+        .domain-card .pitches { font-size:0.78em; color:#888; margin-top:0.3em; }
+        .domain-card .actions a { font-size:0.78em; color:#007bff; text-decoration:none; margin-right:0.5em; }
+        .kanban-col.drag-over { outline:2px dashed #007bff; outline-offset:-4px; }
+        .col-count { font-size:0.8em; font-weight:normal; opacity:0.7; }
+        @media(max-width:800px) { .board { grid-template-columns:repeat(2,1fr); } }
+        @media(max-width:500px) { .board { grid-template-columns:1fr; } }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="topbar">
+        <h1>🗂️ Domain Pipeline</h1>
+        <div class="nav">
+            <a href="/domains">← Portfolio List</a>
+            <a href="/analytics">📊 Analytics</a>
+            <a href="/">📋 Dashboard</a>
+        </div>
+    </div>
+
+    <div class="board">
+        {% for status, label, css in [
+            ('available',   '📋 Available',   'col-available'),
+            ('pitched',     '📧 Pitched',     'col-pitched'),
+            ('negotiating', '🤝 Negotiating', 'col-negotiating'),
+            ('sold',        '✅ Sold',         'col-sold')
+        ] %}
+        <div class="kanban-col {{ css }}" data-status="{{ status }}"
+             ondragover="allowDrop(event)" ondrop="drop(event)">
+            <h2>{{ label }}
+                <span class="col-count">({{ columns[status]|length }})</span>
+            </h2>
+            <div class="kanban-cards">
+                {% for d in columns[status] %}
+                <div class="domain-card" draggable="true"
+                     data-domain-id="{{ d.id }}"
+                     ondragstart="drag(event)">
+                    <h3>{{ d.domain }}</h3>
+                    {% if d.asking_price and d.asking_price > 0 %}
+                        <div class="price">${{ "{:,.0f}".format(d.asking_price) }}</div>
+                    {% endif %}
+                    <div class="pitches">{{ d.pitch_count }} pitch{{ 'es' if d.pitch_count != 1 else '' }}</div>
+                    <div class="actions" style="margin-top:0.4em;">
+                        <a href="/domains/{{ d.id }}/prospects">Find Buyers</a>
+                        <a href="/domains/{{ d.id }}/replies">Replies</a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+let draggedId = null;
+
+function drag(ev) {
+    draggedId = ev.currentTarget.dataset.domainId;
+    ev.currentTarget.classList.add('dragging');
+    ev.dataTransfer.effectAllowed = 'move';
+}
+
+function allowDrop(ev) {
+    ev.preventDefault();
+    ev.currentTarget.classList.add('drag-over');
+}
+
+function drop(ev) {
+    ev.preventDefault();
+    const col = ev.currentTarget;
+    col.classList.remove('drag-over');
+    if (!draggedId) return;
+
+    const newStatus = col.dataset.status;
+    const card = document.querySelector(`[data-domain-id="${draggedId}"]`);
+    if (!card) return;
+
+    const csrf = document.querySelector('meta[name="csrf-token"]').content;
+    fetch(`/domains/${draggedId}/update-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+        body: JSON.stringify({ status: newStatus }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            col.querySelector('.kanban-cards').appendChild(card);
+            card.classList.remove('dragging');
+            // Update column counts
+            document.querySelectorAll('.kanban-col').forEach(c => {
+                const cnt = c.querySelectorAll('.domain-card').length;
+                c.querySelector('.col-count').textContent = `(${cnt})`;
+            });
+        }
+    })
+    .catch(() => card.classList.remove('dragging'));
+
+    draggedId = null;
+}
+
+document.addEventListener('dragend', () => {
+    document.querySelectorAll('.domain-card').forEach(c => c.classList.remove('dragging'));
+    document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('drag-over'));
+});
+</script>
+</body>
+</html>

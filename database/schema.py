@@ -97,6 +97,40 @@ def setup_database(db_path=None):
             FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE
         )
     ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS email_sequences (
+            id INTEGER PRIMARY KEY,
+            name TEXT UNIQUE NOT NULL,
+            description TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS sequence_steps (
+            id INTEGER PRIMARY KEY,
+            sequence_id INTEGER NOT NULL,
+            step_number INTEGER NOT NULL,
+            delay_days INTEGER NOT NULL DEFAULT 0,
+            subject_template TEXT NOT NULL,
+            body_template TEXT NOT NULL,
+            FOREIGN KEY (sequence_id) REFERENCES email_sequences(id) ON DELETE CASCADE
+        )
+    ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS sequence_enrollments (
+            id INTEGER PRIMARY KEY,
+            sequence_id INTEGER NOT NULL,
+            contact_id INTEGER NOT NULL,
+            domain_id INTEGER NOT NULL,
+            current_step INTEGER DEFAULT 1,
+            next_send_at TIMESTAMP,
+            completed INTEGER DEFAULT 0,
+            enrolled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(sequence_id, contact_id),
+            FOREIGN KEY (sequence_id) REFERENCES email_sequences(id) ON DELETE CASCADE,
+            FOREIGN KEY (contact_id) REFERENCES domain_contacts(id) ON DELETE CASCADE
+        )
+    ''')
     conn.commit()
     conn.close()
 

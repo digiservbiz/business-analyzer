@@ -64,6 +64,7 @@
         <h1>🌐 Domain Portfolio</h1>
         <div class="nav">
             <a href="/">📋 Dashboard</a>
+            <a href="/kanban" style="color:#fd7e14;text-decoration:none;font-weight:bold;border:1px solid #fd7e14;padding:0.4em 0.9em;border-radius:4px;font-size:0.9em;">🗂️ Kanban View</a>
             <span style="color:#ccc;">|</span>
             <span style="font-size:0.85em;color:#666;">
                 Signed in as <strong>{{ session.get('username', 'admin') }}</strong>
@@ -173,6 +174,31 @@
             No domains yet — add your first domain above.
         </p>
         {% endif %}
+    </div>
+
+
+    <!-- Bulk CSV Import -->
+    <div class="section" style="margin-top:2em;">
+        <h2>📥 Bulk Import Domains (CSV)</h2>
+        <p style="font-size:0.9em;color:#555;margin-bottom:1em;">
+            Upload a CSV file to add multiple domains at once.
+            Required column: <code>domain</code>. Optional: <code>asking_price</code>, <code>notes</code>.
+        </p>
+        <details>
+            <summary style="cursor:pointer;font-size:0.9em;color:#007bff;margin-bottom:0.8em;">Show example CSV format</summary>
+            <pre style="background:#f8f9fa;padding:0.8em;border-radius:4px;font-size:0.85em;margin:0.5em 0;">domain,asking_price,notes
+nyc-bakery.com,500,Good local domain
+dubai-restaurants.com,1200,High search volume
+london-plumbers.net,800,</pre>
+        </details>
+        <form action="/domains/import-csv" method="post" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="file" name="csv_file" accept=".csv" required
+                   style="padding:0.5em;border:1px solid #ccc;border-radius:4px;margin-right:0.8em;">
+            <button type="submit" style="background:#007bff;color:white;border:none;padding:0.6em 1.2em;border-radius:4px;cursor:pointer;font-weight:bold;">
+                📥 Import Domains
+            </button>
+        </form>
     </div>
 
 </div>
