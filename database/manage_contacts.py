@@ -83,7 +83,8 @@ def mark_contact_pitched(contact_id):
     try:
         conn = sqlite3.connect("businesses.db")
         conn.execute(
-            "UPDATE domain_contacts SET pitched=1 WHERE id=?", (contact_id,)
+            "UPDATE domain_contacts SET pitched=1, pitched_at=CURRENT_TIMESTAMP WHERE id=?",
+            (contact_id,),
         )
         conn.commit()
     except sqlite3.Error as e:

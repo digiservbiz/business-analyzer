@@ -109,6 +109,18 @@
             </span>
         </h2>
 
+        <!-- One-click full campaign -->
+        <form method="post" action="/domains/{{ domain.id }}/run-campaign"
+              onsubmit="return confirm('Run full automated campaign? This fetches businesses, finds decision-makers via Apollo, and sends pitch emails automatically.')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn" style="background:#fd7e14;color:white;margin-bottom:1em;">
+                🚀 Run Full Campaign (Auto)
+            </button>
+            <span style="font-size:0.85em;color:#666;margin-left:0.5em;">
+                Fetches → finds contacts → pitches all in one click
+            </span>
+        </form>
+
         <!-- Bulk pitch form -->
         <form method="post" action="/domains/{{ domain.id }}/pitch-all">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

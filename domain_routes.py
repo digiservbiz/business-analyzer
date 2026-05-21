@@ -20,6 +20,7 @@ from database.manage_contacts import (
 )
 from integrations.apollo_connector import search_decision_makers
 from outreach.email_sender import send_email, build_recipient_email
+from database.manage_campaigns import log_campaign_run, get_campaign_history
 
 domains_bp = Blueprint("domains", __name__)
 
@@ -375,3 +376,49 @@ def domains_pitch_contact(domain_id, contact_id):
 
     flash(f"Pitch sent to {contact['name'] or to_email} ({to_email}).", "success")
     return redirect(url_for("domains.domains_prospects", domain_id=domain_id))
+
+
+@domains_bp.route("/domains/<int:domain_id>/run-campaign", methods=["POST"])
+@login_required
+def domains_run_campaign(domain_id):
+    """One-click: fetch businesses → find decision-makers → send pitches."""
+    from integrations.campaign import run_campaign
+
+    domain = get_domain(domain_id)
+    if not domain:
+        flash("Domain not found.", "error")
+        return redirect(url_for("domains.domains_list"))
+
+    result = run_campaign(domain_id)
+    log_campaign_run(domain_id, result)
+
+    summary = (
+        f"Campaign complete for {result['domain']}: "
+        f"{result['businesses_fetched']} businesses fetched, "
+        f"{result['contacts_found']} decision-makers found, "
+        f"{result['emails_sent']} pitch emails sent."
+    )
+    if result["errors"]:
+        summary += f" ⚠ {len(result['errors'])} error(s) — see logs."
+        flash(summary, "info")
+    else:
+        flash(summary, "success")
+
+    return redirect(url_for("domains.domains_prospects", domain_id=domain_id))
+
+
+@domains_bp.route("/domains/<int:domain_id>/campaign-history")
+@login_required
+def domains_campaign_history(domain_id):
+    """Show campaign run history for a domain."""
+    domain = get_domain(domain_id)
+    if not domain:
+        flash("Domain not found.", "error")
+        return redirect(url_for("domains.domains_list"))
+
+    history = get_campaign_history(domain_id, limit=20)
+    return render_template(
+        "campaign_history.html",
+        domain=domain,
+        history=history,
+    )

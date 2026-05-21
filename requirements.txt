@@ -4,3 +4,4 @@ flask-wtf
 gunicorn
 python-dotenv
 requests
+APScheduler

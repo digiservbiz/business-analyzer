@@ -63,6 +63,29 @@ def setup_database(db_path=None):
             FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE SET NULL
         )
     ''')
+    # Migrate domain_contacts: add pitched_at and followup_sent if missing
+    for _sql in [
+        "ALTER TABLE domain_contacts ADD COLUMN pitched_at TIMESTAMP",
+        "ALTER TABLE domain_contacts ADD COLUMN followup_sent INTEGER DEFAULT 0",
+    ]:
+        try:
+            c.execute(_sql)
+        except sqlite3.OperationalError:
+            pass  # column already exists
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS campaign_runs (
+            id INTEGER PRIMARY KEY,
+            domain_id INTEGER NOT NULL,
+            domain TEXT,
+            businesses_fetched INTEGER DEFAULT 0,
+            weak_website_count INTEGER DEFAULT 0,
+            contacts_found INTEGER DEFAULT 0,
+            emails_sent INTEGER DEFAULT 0,
+            errors TEXT,
+            ran_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE
+        )
+    ''')
     conn.commit()
     conn.close()
 

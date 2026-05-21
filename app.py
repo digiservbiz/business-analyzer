@@ -25,6 +25,7 @@ from outreach.email_sender import send_email, get_email_template, build_recipien
 from reports.report_generator import generate_report
 from integrations.n8n_connector import send_to_n8n
 from domain_routes import domains_bp
+from scheduler import start_scheduler, get_scheduler_status
 
 # ---------------------------------------------------------------------------
 # Logging  [FIX #8]
@@ -68,6 +69,10 @@ PER_PAGE = 10  # rows per page
 
 # Domain Sales Mode blueprint
 app.register_blueprint(domains_bp)
+
+# Start background scheduler (campaigns + follow-ups)  [Level 2 & 4]
+if not app.debug:
+    start_scheduler()
 
 # ---------------------------------------------------------------------------
 # Auth helpers
@@ -390,6 +395,56 @@ def delete_business(business_id):
         flash(f"Business '{business['name']}' deleted.", "success")
     conn.close()
     return redirect(url_for("index"))
+
+
+# ---------------------------------------------------------------------------
+# Automation routes — n8n webhook + scheduler status  [Level 3]
+# ---------------------------------------------------------------------------
+
+_WEBHOOK_TOKEN = os.getenv("WEBHOOK_TOKEN", "")
+
+
+@app.route("/webhook/run-campaign", methods=["POST"])
+def webhook_run_campaign():
+    """
+    n8n-compatible webhook to trigger a campaign programmatically.
+    Protected by X-Webhook-Token header or 'token' form field.
+    Body (JSON or form): { "domain_id": 1 }  — omit to run all domains.
+    """
+    token = (
+        request.headers.get("X-Webhook-Token", "")
+        or request.form.get("token", "")
+        or (request.get_json(silent=True) or {}).get("token", "")
+    )
+    if _WEBHOOK_TOKEN and token != _WEBHOOK_TOKEN:
+        return {"error": "Unauthorized"}, 401
+
+    from integrations.campaign import run_campaign, run_all_campaigns
+    from database.manage_campaigns import log_campaign_run
+
+    payload = request.get_json(silent=True) or {}
+    domain_id = payload.get("domain_id") or request.form.get("domain_id")
+
+    if domain_id:
+        result = run_campaign(int(domain_id))
+        log_campaign_run(int(domain_id), result)
+        return result, 200
+    else:
+        results = run_all_campaigns()
+        for r in results:
+            log_campaign_run(r["domain_id"], r)
+        return {
+            "campaigns_run": len(results),
+            "total_emails_sent": sum(r["emails_sent"] for r in results),
+            "results": results,
+        }, 200
+
+
+@app.route("/scheduler/status")
+@login_required
+def scheduler_status_route():
+    """Show scheduler status (for debugging)."""
+    return get_scheduler_status()
 
 
 # ---------------------------------------------------------------------------

@@ -146,6 +146,11 @@
                 <td>
                     <div class="actions">
                         <a href="/domains/{{ d.id }}/prospects" class="btn btn-success btn-sm">🔍 Find Buyers</a>
+                        <form action="/domains/{{ d.id }}/run-campaign" method="post" style="display:inline;" onsubmit="return confirm('Run full campaign for {{ d.domain }}? This will fetch businesses, search for decision-makers via Apollo, and send pitch emails.')">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" style="background:#fd7e14;color:white;border:none;padding:0.35em 0.8em;border-radius:4px;cursor:pointer;font-size:0.85em;">🚀 Run Campaign</button>
+                        </form>
+                        <a href="/domains/{{ d.id }}/campaign-history" style="background:#6c757d;color:white;padding:0.35em 0.8em;border-radius:4px;text-decoration:none;font-size:0.85em;">📋 History</a>
                         {% if d.status != 'sold' %}
                         <form method="post" action="/domains/{{ d.id }}/sold" style="margin:0;" onsubmit="return confirm('Mark {{ d.domain }} as sold?')">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
