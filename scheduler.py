@@ -34,6 +34,16 @@ def _followups_job() -> None:
         logger.error("Scheduled follow-ups error: %s", exc)
 
 
+def _imap_check_job() -> None:
+    try:
+        from integrations.imap_monitor import check_replies
+        found = check_replies()
+        if found:
+            logger.info("IMAP check: %d new replies detected", found)
+    except Exception as exc:
+        logger.error("IMAP check error: %s", exc)
+
+
 def start_scheduler() -> None:
     """Start the background scheduler. Safe to call multiple times."""
     global _scheduler
@@ -54,6 +64,14 @@ def start_scheduler() -> None:
         _followups_job,
         CronTrigger(hour=followup_hour, minute=0),
         id="daily_followups",
+        replace_existing=True,
+    )
+    # Check inbox for replies every 2 hours
+    _scheduler.add_job(
+        _imap_check_job,
+        "interval",
+        hours=2,
+        id="imap_reply_check",
         replace_existing=True,
     )
     _scheduler.start()

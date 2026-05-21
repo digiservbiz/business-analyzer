@@ -132,6 +132,7 @@
                         <th>Address</th>
                         <th>Website</th>
                         <th>Priority</th>
+                        <th>Score</th>
                         <th>Decision Makers</th>
                     </tr>
                 </thead>
@@ -163,6 +164,18 @@
                             <span class="already-pitched">Already pitched</span>
                         {% else %}
                             <span style="color:#6c757d;">Normal</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align:center;">
+                        {% set max_score = b.contacts | map(attribute='lead_score') | max | default(0) if b.contacts else 0 %}
+                        {% if max_score >= 70 %}
+                            <span style="background:#28a745;color:#fff;padding:0.25em 0.6em;border-radius:12px;font-size:0.85em;font-weight:bold;">{{ max_score }}</span>
+                        {% elif max_score >= 40 %}
+                            <span style="background:#fd7e14;color:#fff;padding:0.25em 0.6em;border-radius:12px;font-size:0.85em;font-weight:bold;">{{ max_score }}</span>
+                        {% elif max_score > 0 %}
+                            <span style="background:#6c757d;color:#fff;padding:0.25em 0.6em;border-radius:12px;font-size:0.85em;">{{ max_score }}</span>
+                        {% else %}
+                            <span style="color:#ccc;font-size:0.8em;">—</span>
                         {% endif %}
                     </td>
                     <td style="min-width:200px;">

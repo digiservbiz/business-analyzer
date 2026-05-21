@@ -18,6 +18,10 @@ from database.manage_contacts import (
     add_contacts, get_all_contacts_for_domain,
     get_contact, mark_contact_pitched,
 )
+from database.manage_contacts import (
+    mark_contact_replied, save_reply_draft, get_replied_contacts,
+)
+from integrations.ai_generator import generate_personalized_pitch, draft_reply as ai_draft_reply
 from integrations.apollo_connector import search_decision_makers
 from outreach.email_sender import send_email, build_recipient_email
 from database.manage_campaigns import log_campaign_run, get_campaign_history
@@ -422,3 +426,94 @@ def domains_campaign_history(domain_id):
         domain=domain,
         history=history,
     )
+
+
+@domains_bp.route("/domains/<int:domain_id>/replies")
+@login_required
+def domains_replies(domain_id):
+    """Show all contacts who have replied, with AI draft responses."""
+    domain = get_domain(domain_id)
+    if not domain:
+        flash("Domain not found.", "error")
+        return redirect(url_for("domains.domains_list"))
+
+    replied = get_replied_contacts(domain_id)
+    return render_template(
+        "domain_replies.html",
+        domain=domain,
+        replied=replied,
+    )
+
+
+@domains_bp.route("/domains/<int:domain_id>/draft-reply/<int:contact_id>", methods=["POST"])
+@login_required
+def domains_draft_reply(domain_id, contact_id):
+    """Generate an AI counter-offer draft for a replying contact."""
+    import sqlite3
+    domain = get_domain(domain_id)
+    if not domain:
+        flash("Domain not found.", "error")
+        return redirect(url_for("domains.domains_list"))
+
+    contact = get_contact(contact_id)
+    if not contact:
+        flash("Contact not found.", "error")
+        return redirect(url_for("domains.domains_replies", domain_id=domain_id))
+
+    # Get business name for context
+    conn = sqlite3.connect("businesses.db")
+    conn.row_factory = sqlite3.Row
+    biz = conn.execute(
+        "SELECT name FROM businesses WHERE id=?", (contact["business_id"],)
+    ).fetchone()
+    conn.close()
+    biz_name = biz["name"] if biz else "their business"
+
+    draft = ai_draft_reply(
+        domain=domain["domain"],
+        asking_price=domain["asking_price"] or 0,
+        contact_name=contact["name"] or "",
+        contact_title=contact["title"] or "",
+        business_name=biz_name,
+    )
+
+    if draft:
+        save_reply_draft(contact_id, draft)
+        flash(f"AI draft generated for {contact['name'] or 'contact'}.", "success")
+    else:
+        flash(
+            "AI draft unavailable — set ANTHROPIC_API_KEY in .env to enable.",
+            "error",
+        )
+
+    return redirect(url_for("domains.domains_replies", domain_id=domain_id))
+
+
+@domains_bp.route("/domains/<int:domain_id>/send-reply/<int:contact_id>", methods=["POST"])
+@login_required
+def domains_send_reply(domain_id, contact_id):
+    """Send the AI-drafted reply to a contact."""
+    domain = get_domain(domain_id)
+    if not domain:
+        flash("Domain not found.", "error")
+        return redirect(url_for("domains.domains_list"))
+
+    contact = get_contact(contact_id)
+    if not contact:
+        flash("Contact not found.", "error")
+        return redirect(url_for("domains.domains_replies", domain_id=domain_id))
+
+    body = sanitize_input(request.form.get("body", ""), max_length=5000)
+    to_email = (contact["email"] or "").strip()
+
+    if not to_email:
+        flash("No email address for this contact.", "error")
+        return redirect(url_for("domains.domains_replies", domain_id=domain_id))
+    if not body:
+        flash("Reply body is required.", "error")
+        return redirect(url_for("domains.domains_replies", domain_id=domain_id))
+
+    subject = f"Re: {domain['domain']} domain"
+    send_email(to_email, subject, body)
+    flash(f"Reply sent to {contact['name'] or to_email}.", "success")
+    return redirect(url_for("domains.domains_replies", domain_id=domain_id))

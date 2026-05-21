@@ -27,6 +27,7 @@ from database.manage_domains import (
     record_pitch, update_domain_status,
 )
 from domain_analyzer import analyze_domain, generate_pitch_email, is_weak_website
+from integrations.ai_generator import generate_personalized_pitch, score_lead
 from integrations.apollo_connector import search_decision_makers
 from outreach.email_sender import send_email
 
@@ -119,6 +120,16 @@ def run_campaign(domain_id: int) -> dict:
         if error:
             result["errors"].append(f"Apollo '{b['name']}': {error}")
         elif people:
+            # Score each lead before saving
+            for p in people:
+                p["lead_score"] = score_lead(
+                    business_name=b["name"],
+                    website=b["website"] or "",
+                    is_weak=is_weak_website(b["website"] or ""),
+                    contact_title=p.get("title", ""),
+                    industry=analysis.get("industry", ""),
+                    domain=domain["domain"],
+                )
             add_contacts(domain_id, b["id"], people)
             result["contacts_found"] += len(people)
 
@@ -137,7 +148,17 @@ def run_campaign(domain_id: int) -> dict:
             if c.get("pitched") or not c.get("email"):
                 continue
             first = (c["name"] or "").split()[0] or "there"
-            pitch = generate_pitch_email(
+            # Try AI-personalized pitch first; fall back to template
+            ai_pitch = generate_personalized_pitch(
+                domain=domain["domain"],
+                asking_price=domain["asking_price"] or 0,
+                contact_name=c.get("name", ""),
+                contact_title=c.get("title", ""),
+                business_name=biz_name,
+                business_website="",
+                industry=analysis.get("industry", ""),
+            )
+            pitch = ai_pitch or generate_pitch_email(
                 domain["domain"], first, domain["asking_price"] or 0
             )
             try:

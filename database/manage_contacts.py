@@ -18,12 +18,12 @@ def add_contacts(domain_id, business_id, contacts):
         for c in contacts:
             conn.execute(
                 """INSERT INTO domain_contacts
-                   (domain_id, business_id, name, title, email, linkedin_url, source)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                   (domain_id, business_id, name, title, email, linkedin_url, source, lead_score)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                 (domain_id, business_id,
                  c.get("name", ""), c.get("title", ""),
                  c.get("email", ""), c.get("linkedin_url", ""),
-                 c.get("source", "apollo")),
+                 c.get("source", "apollo"), c.get("lead_score", 0)),
             )
         conn.commit()
         return True
@@ -89,6 +89,62 @@ def mark_contact_pitched(contact_id):
         conn.commit()
     except sqlite3.Error as e:
         print(f"manage_contacts error: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+
+def mark_contact_replied(contact_id):
+    """Mark a contact as having replied."""
+    conn = None
+    try:
+        conn = sqlite3.connect("businesses.db")
+        conn.execute(
+            "UPDATE domain_contacts SET replied=1, replied_at=CURRENT_TIMESTAMP WHERE id=?",
+            (contact_id,),
+        )
+        conn.commit()
+    except sqlite3.Error as e:
+        print(f"manage_contacts error: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+
+def save_reply_draft(contact_id, draft_text):
+    """Store an AI-generated reply draft for a contact."""
+    conn = None
+    try:
+        conn = sqlite3.connect("businesses.db")
+        conn.execute(
+            "UPDATE domain_contacts SET reply_draft=? WHERE id=?",
+            (draft_text, contact_id),
+        )
+        conn.commit()
+    except sqlite3.Error as e:
+        print(f"manage_contacts error: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_replied_contacts(domain_id):
+    """Return all contacts for a domain that have replied."""
+    conn = None
+    try:
+        conn = sqlite3.connect("businesses.db")
+        conn.row_factory = sqlite3.Row
+        return conn.execute(
+            """SELECT dc.*, b.name as business_name, b.website as business_website
+               FROM domain_contacts dc
+               LEFT JOIN businesses b ON dc.business_id = b.id
+               WHERE dc.domain_id=? AND dc.replied=1
+               ORDER BY dc.replied_at DESC""",
+            (domain_id,),
+        ).fetchall()
+    except sqlite3.Error as e:
+        print(f"manage_contacts error: {e}")
+        return []
     finally:
         if conn:
             conn.close()

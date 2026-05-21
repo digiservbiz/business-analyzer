@@ -151,6 +151,7 @@
                             <button type="submit" style="background:#fd7e14;color:white;border:none;padding:0.35em 0.8em;border-radius:4px;cursor:pointer;font-size:0.85em;">🚀 Run Campaign</button>
                         </form>
                         <a href="/domains/{{ d.id }}/campaign-history" style="background:#6c757d;color:white;padding:0.35em 0.8em;border-radius:4px;text-decoration:none;font-size:0.85em;">📋 History</a>
+                        <a href="/domains/{{ d.id }}/replies" style="background:#17a2b8;color:white;padding:0.35em 0.8em;border-radius:4px;text-decoration:none;font-size:0.85em;">💬 Replies</a>
                         {% if d.status != 'sold' %}
                         <form method="post" action="/domains/{{ d.id }}/sold" style="margin:0;" onsubmit="return confirm('Mark {{ d.domain }} as sold?')">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
