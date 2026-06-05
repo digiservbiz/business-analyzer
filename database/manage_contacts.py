@@ -128,6 +128,44 @@ def save_reply_draft(contact_id, draft_text):
             conn.close()
 
 
+def save_reply_intent(contact_id, intent):
+    """Store classified reply intent on a contact."""
+    conn = None
+    try:
+        conn = sqlite3.connect("businesses.db")
+        conn.execute(
+            """UPDATE domain_contacts
+               SET reply_intent=?, intent_detected_at=CURRENT_TIMESTAMP WHERE id=?""",
+            (intent, contact_id),
+        )
+        conn.commit()
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_contacts_by_intent(domain_id, intent):
+    """Return contacts for a domain filtered by reply intent."""
+    conn = None
+    try:
+        conn = sqlite3.connect("businesses.db")
+        conn.row_factory = sqlite3.Row
+        return conn.execute(
+            """SELECT * FROM domain_contacts
+               WHERE domain_id=? AND reply_intent=?
+               ORDER BY intent_detected_at DESC""",
+            (domain_id, intent),
+        ).fetchall()
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        return []
+    finally:
+        if conn:
+            conn.close()
+
+
 def get_replied_contacts(domain_id):
     """Return all contacts for a domain that have replied."""
     conn = None
