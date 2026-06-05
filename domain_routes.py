@@ -11,6 +11,7 @@ import io
 from urllib.parse import urlparse
 
 from domain_analyzer import analyze_domain, is_weak_website, generate_pitch_email
+from app import get_db_connection
 from database.manage_domains import (
     add_domain, get_all_domains, get_domain,
     update_domain_status, delete_domain,
@@ -594,3 +595,37 @@ def domains_import_csv():
         "success" if imported else "info",
     )
     return redirect(url_for("domains.domains_list"))
+
+
+@domains_bp.route("/domains/<int:domain_id>/analyze-website/<int:business_id>", methods=["POST"])
+@login_required
+def analyze_website_route(domain_id, business_id):
+    """Analyze a business website with Claude AI and store results."""
+    import json
+    from integrations.website_analyzer import analyze_website, analysis_to_json
+    conn = get_db_connection()
+    biz = conn.execute("SELECT name, website FROM businesses WHERE id=?", (business_id,)).fetchone()
+    contact = conn.execute(
+        "SELECT id FROM domain_contacts WHERE domain_id=? AND business_id=?",
+        (domain_id, business_id),
+    ).fetchone()
+    conn.close()
+
+    if not biz:
+        flash("Business not found.", "error")
+        return redirect(url_for("domains.domain_prospects", domain_id=domain_id))
+
+    analysis = analyze_website(biz["name"], biz["website"])
+    if contact:
+        upd = get_db_connection()
+        upd.execute(
+            "UPDATE domain_contacts SET website_analysis=?, close_probability=? WHERE id=?",
+            (analysis_to_json(analysis), analysis.get("score", 0), contact["id"]),
+        )
+        upd.commit()
+        upd.close()
+
+    score = analysis.get("score", 0)
+    hook = analysis.get("pitch_hook", "")
+    flash(f"Website analyzed — score: {score}/100. {hook}", "info")
+    return redirect(url_for("domains.domain_prospects", domain_id=domain_id))
