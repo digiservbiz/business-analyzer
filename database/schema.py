@@ -78,11 +78,30 @@ def setup_database(db_path=None):
         "ALTER TABLE domain_contacts ADD COLUMN replied INTEGER DEFAULT 0",
         "ALTER TABLE domain_contacts ADD COLUMN replied_at TIMESTAMP",
         "ALTER TABLE domain_contacts ADD COLUMN reply_draft TEXT",
+        "ALTER TABLE domain_contacts ADD COLUMN reply_intent TEXT",
+        "ALTER TABLE domain_contacts ADD COLUMN intent_detected_at TIMESTAMP",
+        "ALTER TABLE domain_contacts ADD COLUMN close_probability INTEGER DEFAULT 0",
+        "ALTER TABLE domain_contacts ADD COLUMN website_analysis TEXT",
+        "ALTER TABLE domain_contacts ADD COLUMN phone TEXT",
     ]:
         try:
             c.execute(_sql)
         except sqlite3.OperationalError:
             pass  # column already exists
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS news_alerts (
+            id INTEGER PRIMARY KEY,
+            domain_id INTEGER,
+            business_name TEXT NOT NULL,
+            headline TEXT NOT NULL,
+            url TEXT,
+            source TEXT,
+            relevance_score INTEGER DEFAULT 0,
+            detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            actioned INTEGER DEFAULT 0,
+            FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE
+        )
+    ''')
     c.execute('''
         CREATE TABLE IF NOT EXISTS campaign_runs (
             id INTEGER PRIMARY KEY,

@@ -99,6 +99,17 @@ def _sequences_job() -> None:
         logger.error("Sequences job error: %s", exc)
 
 
+def _news_job():
+    """Check company news for buying signals every 6 hours."""
+    try:
+        from integrations.news_monitor import check_news
+        count = check_news()
+        if count:
+            logger.info("News job: %d new alerts", count)
+    except Exception as exc:
+        logger.error("News job error: %s", exc)
+
+
 def start_scheduler() -> None:
     """Start the background scheduler. Safe to call multiple times."""
     global _scheduler
@@ -135,6 +146,13 @@ def start_scheduler() -> None:
         "interval",
         hours=1,
         id="sequence_steps",
+        replace_existing=True,
+    )
+    _scheduler.add_job(
+        _news_job,
+        "interval",
+        hours=6,
+        id="news_monitor",
         replace_existing=True,
     )
     _scheduler.start()
