@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News Alerts — Business Analyzer</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+        body { font-family: sans-serif; margin: 2em; background: #f4f4f9; color: #333; }
+        .container { max-width: 1000px; margin: auto; background: #fff; padding: 2em; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5em; }
+        .topbar h1 { margin:0; font-size:1.4em; }
+        .nav a { color:#007bff; text-decoration:none; font-weight:bold; margin-right:1em; }
+        h2 { border-bottom:2px solid #007bff; padding-bottom:0.5em; color:#007bff; margin-top:0; }
+        .flash { padding:1em; margin-bottom:1em; border-radius:4px; }
+        .flash.success { background:#d4edda; color:#155724; border:1px solid #c3e6cb; }
+        .flash.info    { background:#d1ecf1; color:#0c5460; border:1px solid #bee5eb; }
+        .flash.error   { background:#f8d7da; color:#721c24; border:1px solid #f5c6cb; }
+        .alert-card { border:1px solid #dee2e6; border-radius:6px; padding:1em 1.2em; margin-bottom:1em; display:flex; justify-content:space-between; align-items:flex-start; gap:1em; }
+        .alert-card.unread { border-left:4px solid #fd7e14; background:#fffdf9; }
+        .alert-card.read { opacity:0.6; }
+        .score-badge { padding:0.25em 0.6em; border-radius:12px; font-size:0.8em; font-weight:bold; color:#fff; white-space:nowrap; }
+        .btn-sm { padding:0.3em 0.7em; border:none; border-radius:4px; cursor:pointer; font-size:0.82em; font-weight:bold; text-decoration:none; }
+        .btn-primary { background:#007bff; color:#fff; }
+        .btn-orange { background:#fd7e14; color:#fff; }
+        .btn-orange:hover { background:#e96c00; }
+        .company { font-weight:bold; font-size:1em; }
+        .headline { margin:0.3em 0; }
+        .meta { font-size:0.8em; color:#888; }
+        .run-form { margin-bottom:1.5em; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="topbar">
+        <h1>📰 Company News Alerts
+            {% if unread > 0 %}
+            <span style="background:#dc3545;color:#fff;padding:0.2em 0.5em;border-radius:10px;font-size:0.6em;vertical-align:middle;">{{ unread }} new</span>
+            {% endif %}
+        </h1>
+        <div class="nav">
+            <a href="/domains">📁 Portfolio</a>
+            <a href="/analytics">📊 Analytics</a>
+            <a href="/">📋 Dashboard</a>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}{% for category, message in messages %}
+            <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}{% endif %}
+    {% endwith %}
+
+    <div class="run-form">
+        <form method="post" action="/news-alerts/run">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn-sm btn-orange">🔄 Run News Check Now</button>
+            <span style="font-size:0.85em;color:#666;margin-left:0.5em;">Automatically runs every 6 hours</span>
+        </form>
+    </div>
+
+    <h2>Recent Alerts
+        <span style="font-size:0.7em;font-weight:normal;color:#666;">({{ alerts|length }} total)</span>
+    </h2>
+
+    {% if alerts %}
+        {% for alert in alerts %}
+        <div class="alert-card {% if alert.actioned %}read{% else %}unread{% endif %}">
+            <div style="flex:1;">
+                <div class="company">🏢 {{ alert.business_name }}</div>
+                <div class="headline">
+                    {% if alert.url %}
+                        <a href="{{ alert.url }}" target="_blank" style="color:#007bff;">{{ alert.headline }}</a>
+                    {% else %}
+                        {{ alert.headline }}
+                    {% endif %}
+                </div>
+                <div class="meta">
+                    {{ alert.source or 'Google News' }} &bull; {{ alert.detected_at[:16] }}
+                    {% if alert.actioned %}&bull; <em>Actioned</em>{% endif %}
+                </div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:0.5em;">
+                <span class="score-badge" style="background:{% if alert.relevance_score >= 70 %}#28a745{% elif alert.relevance_score >= 40 %}#fd7e14{% else %}#6c757d{% endif %};">
+                    {{ alert.relevance_score }}% signal
+                </span>
+                {% if not alert.actioned %}
+                <form method="post" action="/news-alerts/{{ alert.id }}/action">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn-sm btn-primary">✓ Mark Done</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p style="color:#666;text-align:center;padding:2em 0;">
+            No news alerts yet.<br>
+            Click <strong>🔄 Run News Check Now</strong> to scan for company news.
+        </p>
+    {% endif %}
+</div>
+</body>
+</html>

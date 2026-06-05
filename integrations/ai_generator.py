@@ -195,3 +195,45 @@ def draft_reply(
     except Exception as exc:
         logger.warning("AI reply draft failed: %s", exc)
         return None
+
+
+def predict_close_probability(
+    lead_score: int,
+    replied: int,
+    reply_intent: str,
+    followup_sent: int,
+    days_since_pitch: int = 0,
+) -> int:
+    """
+    Predict close probability 0-100 based on contact signals.
+    No API call needed — pure heuristic model.
+    """
+    score = 0
+
+    # Base: lead quality
+    score += min(lead_score // 2, 30)  # up to 30 pts from lead score
+
+    # Reply signals
+    intent_scores = {
+        "interested": 40,
+        "info_needed": 25,
+        "price_objection": 15,
+        "not_now": 10,
+        "not_interested": 0,
+        "unknown": 5,
+    }
+    score += intent_scores.get(reply_intent or "", 0) if replied else 0
+
+    # Engagement signals
+    if replied:
+        score += 15
+    if followup_sent and not replied:
+        score -= 5  # no reply even after follow-up = lower chance
+
+    # Recency penalty
+    if days_since_pitch > 30:
+        score = max(0, score - 10)
+    if days_since_pitch > 60:
+        score = max(0, score - 15)
+
+    return min(100, max(0, score))

@@ -34,6 +34,12 @@ try:
 except ImportError:
     _sequence_bp_available = False
 
+try:
+    from news_routes import news_bp
+    _news_bp_available = True
+except ImportError:
+    _news_bp_available = False
+
 # ---------------------------------------------------------------------------
 # Logging  [FIX #8]
 # ---------------------------------------------------------------------------
@@ -78,6 +84,8 @@ PER_PAGE = 10  # rows per page
 app.register_blueprint(domains_bp)
 if _sequence_bp_available:
     app.register_blueprint(sequence_bp)
+if _news_bp_available:
+    app.register_blueprint(news_bp)
 
 # Start background scheduler (campaigns + follow-ups)  [Level 2 & 4]
 if not app.debug:

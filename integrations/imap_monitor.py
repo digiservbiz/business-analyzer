@@ -21,6 +21,35 @@ def _extract_sender(from_header: str) -> str:
     return from_header.lower()
 
 
+def _classify_intent(reply_body: str) -> str:
+    """Use Claude to classify reply intent. Falls back to 'unknown' if API unavailable."""
+    api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+    if not api_key or not reply_body.strip():
+        return "unknown"
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=20,
+            messages=[{
+                "role": "user",
+                "content": (
+                    "Classify this email reply into exactly one of these labels: "
+                    "interested, info_needed, price_objection, not_now, not_interested\n\n"
+                    f"Reply:\n{reply_body[:1000]}\n\n"
+                    "Respond with only the label, nothing else."
+                ),
+            }],
+        )
+        label = resp.content[0].text.strip().lower()
+        valid = {"interested", "info_needed", "price_objection", "not_now", "not_interested"}
+        return label if label in valid else "unknown"
+    except Exception as exc:
+        logger.debug("Intent classification error: %s", exc)
+        return "unknown"
+
+
 def check_replies() -> int:
     """
     Connect to IMAP inbox, find replies from pitched contacts, mark them.
@@ -69,16 +98,34 @@ def check_replies() -> int:
 
                 if sender in pitched_map:
                     contact_id = pitched_map[sender]
+                    # Fetch full reply body for intent classification
+                    reply_body = ""
+                    try:
+                        _, full_data = mail.fetch(mid, "(RFC822)")
+                        full_msg = email_lib.message_from_bytes(full_data[0][1])
+                        if full_msg.is_multipart():
+                            for part in full_msg.walk():
+                                if part.get_content_type() == "text/plain":
+                                    reply_body = part.get_payload(decode=True).decode("utf-8", errors="ignore")
+                                    break
+                        else:
+                            reply_body = full_msg.get_payload(decode=True).decode("utf-8", errors="ignore")
+                    except Exception:
+                        pass
+
+                    intent = _classify_intent(reply_body)
+
                     upd = sqlite3.connect("businesses.db")
                     upd.execute(
                         """UPDATE domain_contacts
-                           SET replied=1, replied_at=CURRENT_TIMESTAMP
+                           SET replied=1, replied_at=CURRENT_TIMESTAMP,
+                               reply_intent=?, intent_detected_at=CURRENT_TIMESTAMP
                            WHERE id=?""",
-                        (contact_id,),
+                        (intent, contact_id),
                     )
                     upd.commit()
                     upd.close()
-                    logger.info("Reply detected from %s (contact id=%d)", sender, contact_id)
+                    logger.info("Reply from %s (id=%d) intent=%s", sender, contact_id, intent)
                     new_replies += 1
             except Exception as exc:
                 logger.debug("Error processing message %s: %s", mid, exc)
